@@ -51,6 +51,46 @@ export const GRIMM_DRIVE_EPISODES: Record<string, { fileId: string; title: strin
     title: 'Grimm.1x08.HD1080p-lat.mkv',
     quality: '1080p HD Latino',
   },
+  'grimm-s1e10': {
+    fileId: '1uBTnS2cgqxbLQd6mq_l4bTsGZYabD3fK',
+    title: 'Grimm.1x10.HD1080p-lat.mkv',
+    quality: '1080p HD Latino',
+  },
+  'grimm-s1e11': {
+    fileId: '1guos_LmcB-Tg1pbf2T959Klw_a6lSUfZ',
+    title: 'Grimm.1x11.Dual.1080p-lat.mkv',
+    quality: '1080p Dual Latino / Inglés',
+  },
+  'grimm-s1e12': {
+    fileId: '18Ak9YC7zoUdXvLJ99lu_jbZnMvmYRomg',
+    title: 'Grimm.1x12.Dual.1080p-lat.mkv',
+    quality: '1080p Dual Latino / Inglés',
+  },
+  'grimm-s1e14': {
+    fileId: '1HUWtoiKZp537AlKNyTENBxFFFPbWgz0X',
+    title: 'Grimm.1x14.Dual.1080p-lat.mkv',
+    quality: '1080p Dual Latino / Inglés',
+  },
+  'grimm-s1e15': {
+    fileId: '1JR5tckk_pASBjiUm29hWxuEm9JI0T9o-',
+    title: 'Grimm.1x15.Dual.1080p-lat.mkv',
+    quality: '1080p Dual Latino / Inglés',
+  },
+  'grimm-s1e16': {
+    fileId: '15koE9OTJdUyUwkEhmNUKp3TymabT0oq7',
+    title: 'Grimm.1x16.Dual.1080p-lat.mkv',
+    quality: '1080p Dual Latino / Inglés',
+  },
+  'grimm-s1e17': {
+    fileId: '1ZFd7DRbz3Hqy7m7lpE_Fq3fd3CxayS7V',
+    title: 'Grimm.1x17.Dual.1080p-lat.mkv',
+    quality: '1080p Dual Latino / Inglés',
+  },
+  'grimm-s1e18': {
+    fileId: '1inGcre4hPFW2p7dC0vjrJ2RgrnV_ncjR',
+    title: 'Grimm.1x18.Dual.1080p-lat.mkv',
+    quality: '1080p Dual Latino / Inglés',
+  },
 };
 
 /**
