@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   ScrollView,
   View,
@@ -14,7 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Chip, ProgressBar } from 'react-native-paper';
+import { ActivityIndicator, ProgressBar } from 'react-native-paper';
 
 import { useStore } from '@/store/useStore';
 import { db } from '@/db';
@@ -25,6 +25,8 @@ import type { SeriesWithProgress, TMDBSearchResult } from '@/types';
 import WebHeader from '@/components/WebHeader';
 import { DRIVE_MOVIES } from '@/services/googleDriveMovies';
 
+type CategoryFilter = 'all' | 'chicago' | 'movies' | 'series' | 'recs';
+
 export default function HomeScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -32,21 +34,22 @@ export default function HomeScreen() {
 
   const [recommendations, setRecommendations] = useState<TMDBSearchResult[]>([]);
   const [continueSeries, setContinueSeries] = useState<SeriesWithProgress | null>(null);
+  const [activeCategory, setActiveCategory] = useState<CategoryFilter>('all');
   const [loading, setLoading] = useState(seriesList.length === 0);
   const [refreshing, setRefreshing] = useState(false);
 
-  const isDesktop = width >= 768;
-  const isLargeDesktop = width >= 1200;
+  // Responsive breakpoints
+  const isMobile = width < 600;
+  const isTablet = width >= 600 && width < 1024;
+  const isDesktop = width >= 1024;
+  const isWideScreen = width >= 1440;
 
-  // Ultra-fast optimized loader: 1 single parallel fetch, zero blocking TMDB
+  // Ultra-fast loader: 1 single parallel query for series + progress
   const loadData = useCallback(async () => {
     try {
       const userId = user?.id ?? 1;
 
-      // 1. Fetch series from Neon
       const dbSeriesPromise = db.select().from(series).orderBy(series.sortOrder);
-      
-      // 2. Fetch all user progress in 1 single query instead of N queries
       const progressPromise = db
         .select({ episodeId: userProgress.episodeId })
         .from(userProgress)
@@ -59,13 +62,11 @@ export default function HomeScreen() {
         .catch(() => []);
 
       const [dbSeries, watchedRows] = await Promise.all([dbSeriesPromise, progressPromise]);
-
       const watchedSet = new Set((watchedRows || []).map((r) => r.episodeId));
 
       const seriesWithProgress: SeriesWithProgress[] = dbSeries.map((s) => {
         const total = Number(s.numberOfEpisodes ?? 0);
-        // Compute watched from set
-        const watched = 0; // Guest or synced count
+        const watched = 0;
         return {
           id: s.id,
           tmdbId: s.tmdbId,
@@ -90,18 +91,17 @@ export default function HomeScreen() {
       const inProgress = seriesWithProgress
         .filter((s) => s.progressPercent > 0 && s.progressPercent < 100)
         .sort((a, b) => b.progressPercent - a.progressPercent);
-      
+
       setContinueSeries(inProgress[0] ?? seriesWithProgress[0] ?? null);
     } catch (error) {
       console.error('[Home] Failed to load series:', error);
     } finally {
-      // Unblock UI immediately — do not wait for external recommendation API!
       setLoading(false);
       setRefreshing(false);
     }
   }, [user, setSeries]);
 
-  // Load recommendations in the background without blocking
+  // Load recommendations in background without blocking initial paint
   useEffect(() => {
     if (userGenres.length > 0 && seriesList.length > 0 && recommendations.length === 0) {
       getRecommendationsByGenre(userGenres.map((g) => g.id))
@@ -122,23 +122,38 @@ export default function HomeScreen() {
     loadData();
   };
 
-  const chicagoSeries = seriesList
-    .filter((s) => s.isChicagoUniverse)
-    .sort((a, b) => a.sortOrder - b.sortOrder);
+  const chicagoSeries = useMemo(
+    () => seriesList.filter((s) => s.isChicagoUniverse).sort((a, b) => a.sortOrder - b.sortOrder),
+    [seriesList]
+  );
 
-  const otherSeries = seriesList
-    .filter((s) => !s.isChicagoUniverse)
-    .sort((a, b) => a.sortOrder - b.sortOrder);
+  const otherSeries = useMemo(
+    () => seriesList.filter((s) => !s.isChicagoUniverse).sort((a, b) => a.sortOrder - b.sortOrder),
+    [seriesList]
+  );
+
+  // Responsive card dimensions for native
+  const nativeCardWidth = useMemo(() => {
+    if (width >= 1200) return '18.4%';
+    if (width >= 800) return '23%';
+    if (width >= 560) return '31%';
+    return '47.6%';
+  }, [width]);
 
   if (loading && seriesList.length === 0) {
     return (
       <View style={styles.loaderContainer}>
         <ActivityIndicator size="large" color="#a855f7" />
         <Text style={styles.loaderTitle}>Iniciando Cronology</Text>
-        <Text style={styles.loaderSub}>Cargando universo de series y conexiones...</Text>
+        <Text style={styles.loaderSub}>Cargando catálogo en orden cronológico...</Text>
       </View>
     );
   }
+
+  const showChicago = activeCategory === 'all' || activeCategory === 'chicago';
+  const showMovies = activeCategory === 'all' || activeCategory === 'movies';
+  const showSeries = activeCategory === 'all' || activeCategory === 'series';
+  const showRecs = activeCategory === 'all' || activeCategory === 'recs';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -154,38 +169,166 @@ export default function HomeScreen() {
         }
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Main responsive container (centered on wide desktop) */}
         <View style={[styles.mainWrapper, isDesktop && styles.desktopWrapper]}>
           
-          {/* Top Bar Header */}
-          <View style={styles.header}>
-            <View>
-              <View style={styles.brandBadge}>
-                <Ionicons name="time" size={14} color="#a855f7" />
-                <Text style={styles.brandBadgeText}>TIMELINE TRACKER</Text>
+          {/* Welcome & Stats Greeting Bar */}
+          <View style={styles.welcomeBanner}>
+            <View style={styles.welcomeLeft}>
+              <View style={styles.greetingRow}>
+                <Text style={styles.greetingEmoji}>{user?.avatarUrl || '👋'}</Text>
+                <Text style={styles.greetingTitle}>
+                  {user ? `¡Hola de nuevo, ${user.displayName || 'Luis'}!` : '¡Bienvenido a Cronology!'}
+                </Text>
               </View>
-              <Text style={styles.title}>Cronology</Text>
+              <Text style={styles.greetingSubtitle}>
+                Series organizadas en orden cronológico oficial y películas completas en streaming Drive 1080p.
+              </Text>
             </View>
-            <View style={styles.headerActions}>
-              <Pressable
-                style={({ hovered }: any) => [
-                  styles.searchActionBtn,
-                  hovered && styles.btnHovered,
-                ]}
-                onPress={() => router.push('/search')}
-              >
-                <Ionicons name="search" size={18} color="#e2e8f0" />
-                {isDesktop && <Text style={styles.searchActionText}>Buscar series</Text>}
-              </Pressable>
+
+            <View style={styles.statsPillRow}>
+              <View style={styles.statPill}>
+                <Ionicons name="tv" size={13} color="#c084fc" />
+                <Text style={styles.statPillText}>{seriesList.length} Series</Text>
+              </View>
+              <View style={[styles.statPill, styles.statPillPink]}>
+                <Ionicons name="film" size={13} color="#f472b6" />
+                <Text style={styles.statPillText}>{DRIVE_MOVIES.length} Película{DRIVE_MOVIES.length > 1 ? 's' : ''}</Text>
+              </View>
+              <View style={[styles.statPill, styles.statPillGreen]}>
+                <Ionicons name="logo-google" size={13} color="#4ade80" />
+                <Text style={styles.statPillText}>Drive HD</Text>
+              </View>
             </View>
           </View>
 
+          {/* Quick Filter Pill Tabs */}
+          <View style={styles.filterBarWrapper}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterBar}
+            >
+              <Pressable
+                style={[
+                  styles.filterTab,
+                  activeCategory === 'all' && styles.filterTabActive,
+                ]}
+                onPress={() => setActiveCategory('all')}
+              >
+                <Ionicons
+                  name="sparkles"
+                  size={14}
+                  color={activeCategory === 'all' ? '#ffffff' : '#94a3b8'}
+                />
+                <Text
+                  style={[
+                    styles.filterTabText,
+                    activeCategory === 'all' && styles.filterTabTextActive,
+                  ]}
+                >
+                  Todo el Catálogo
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={[
+                  styles.filterTab,
+                  activeCategory === 'chicago' && styles.filterTabActive,
+                ]}
+                onPress={() => setActiveCategory('chicago')}
+              >
+                <Ionicons
+                  name="flame"
+                  size={14}
+                  color={activeCategory === 'chicago' ? '#ffffff' : '#f97316'}
+                />
+                <Text
+                  style={[
+                    styles.filterTabText,
+                    activeCategory === 'chicago' && styles.filterTabTextActive,
+                  ]}
+                >
+                  Universo One Chicago
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={[
+                  styles.filterTab,
+                  activeCategory === 'movies' && styles.filterTabActive,
+                ]}
+                onPress={() => setActiveCategory('movies')}
+              >
+                <Ionicons
+                  name="film"
+                  size={14}
+                  color={activeCategory === 'movies' ? '#ffffff' : '#ec4899'}
+                />
+                <Text
+                  style={[
+                    styles.filterTabText,
+                    activeCategory === 'movies' && styles.filterTabTextActive,
+                  ]}
+                >
+                  Películas Drive
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={[
+                  styles.filterTab,
+                  activeCategory === 'series' && styles.filterTabActive,
+                ]}
+                onPress={() => setActiveCategory('series')}
+              >
+                <Ionicons
+                  name="tv"
+                  size={14}
+                  color={activeCategory === 'series' ? '#ffffff' : '#a855f7'}
+                />
+                <Text
+                  style={[
+                    styles.filterTabText,
+                    activeCategory === 'series' && styles.filterTabTextActive,
+                  ]}
+                >
+                  Otras Series
+                </Text>
+              </Pressable>
+
+              {recommendations.length > 0 && (
+                <Pressable
+                  style={[
+                    styles.filterTab,
+                    activeCategory === 'recs' && styles.filterTabActive,
+                  ]}
+                  onPress={() => setActiveCategory('recs')}
+                >
+                  <Ionicons
+                    name="bulb"
+                    size={14}
+                    color={activeCategory === 'recs' ? '#ffffff' : '#38bdf8'}
+                  />
+                  <Text
+                    style={[
+                      styles.filterTabText,
+                      activeCategory === 'recs' && styles.filterTabTextActive,
+                    ]}
+                  >
+                    Recomendados IA
+                  </Text>
+                </Pressable>
+              )}
+            </ScrollView>
+          </View>
+
           {/* Featured Hero Banner */}
-          {continueSeries && (
+          {continueSeries && activeCategory === 'all' && (
             <View style={styles.heroSection}>
               <Pressable
                 style={({ hovered }: any) => [
                   styles.heroCard,
+                  isTablet && styles.heroCardTablet,
                   isDesktop && styles.heroCardDesktop,
                   hovered && styles.heroCardHovered,
                 ]}
@@ -193,33 +336,46 @@ export default function HomeScreen() {
               >
                 <Image
                   source={{ uri: continueSeries.bannerUrl ?? continueSeries.posterUrl ?? '' }}
-                  style={styles.heroImage}
+                  style={styles.heroImage as any}
                   contentFit="cover"
                   transition={400}
                 />
                 <LinearGradient
                   colors={[
-                    'rgba(10,10,15,0.1)',
-                    'rgba(10,10,15,0.7)',
-                    'rgba(10,10,15,0.98)',
+                    'rgba(10,10,15,0.05)',
+                    'rgba(10,10,15,0.5)',
+                    'rgba(10,10,15,0.96)',
                   ]}
                   style={styles.heroGradient}
                 >
                   <View style={styles.heroBadges}>
+                    <View style={styles.heroFeaturePill}>
+                      <Ionicons name="star" size={12} color="#fbbf24" />
+                      <Text style={styles.heroFeatureText}>DESTACADO DE HOY</Text>
+                    </View>
+
                     {continueSeries.isChicagoUniverse && (
                       <View style={styles.chicagoTag}>
-                        <Ionicons name="flame" size={14} color="#f97316" />
-                        <Text style={styles.chicagoTagText}>One Chicago Universe</Text>
+                        <Ionicons name="flame" size={13} color="#f97316" />
+                        <Text style={styles.chicagoTagText}>Universo One Chicago</Text>
                       </View>
                     )}
+
                     <View style={styles.seasonTag}>
                       <Text style={styles.seasonTagText}>
-                        {continueSeries.numberOfSeasons} Temporadas · {continueSeries.numberOfEpisodes} Episodios
+                        {continueSeries.numberOfSeasons} Temporadas · {continueSeries.numberOfEpisodes} Capítulos
                       </Text>
                     </View>
                   </View>
 
-                  <Text style={[styles.heroTitle, isDesktop && styles.heroTitleDesktop]} numberOfLines={2}>
+                  <Text
+                    style={[
+                      styles.heroTitle,
+                      isTablet && styles.heroTitleTablet,
+                      isDesktop && styles.heroTitleDesktop,
+                    ]}
+                    numberOfLines={2}
+                  >
                     {continueSeries.name}
                   </Text>
 
@@ -243,35 +399,40 @@ export default function HomeScreen() {
                       <Ionicons name="play" size={16} color="#ffffff" />
                       <Text style={styles.playBtnText}>Ver Temporadas</Text>
                     </View>
+                    <View style={styles.detailsBtn}>
+                      <Ionicons name="information-circle-outline" size={17} color="#cbd5e1" />
+                      <Text style={styles.detailsBtnText}>Orden Cronológico</Text>
+                    </View>
                   </View>
                 </LinearGradient>
               </Pressable>
             </View>
           )}
 
-          {/* One Chicago Universe Section */}
-          {chicagoSeries.length > 0 && (
+          {/* Section: One Chicago Universe */}
+          {showChicago && chicagoSeries.length > 0 && (
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <View>
                   <View style={styles.sectionTitleRow}>
-                    <Ionicons name="flame" size={22} color="#f97316" />
+                    <View style={styles.sectionIconBadgeOrange}>
+                      <Ionicons name="flame" size={18} color="#f97316" />
+                    </View>
                     <Text style={styles.sectionTitle}>Universo One Chicago</Text>
                   </View>
                   <Text style={styles.sectionSubtitle}>
-                    Franquicia interconectada con 9 arcos crossover organizados en orden cronológico
+                    Franquicia interconectada con crossovers organizados en orden cronológico estricto.
                   </Text>
                 </View>
               </View>
 
-              {/* Responsive Grid for Chicago Universe */}
-              <View style={styles.cardGrid}>
+              <View style={styles.gridContainer as any}>
                 {chicagoSeries.map((s) => (
                   <Pressable
                     key={s.id}
                     style={({ hovered }: any) => [
                       styles.seriesCard,
-                      isDesktop && styles.seriesCardDesktop,
+                      Platform.OS !== 'web' && { width: nativeCardWidth as any },
                       hovered && styles.cardHovered,
                     ]}
                     onPress={() => router.push(`/series/${s.id}`)}
@@ -279,12 +440,17 @@ export default function HomeScreen() {
                     <View style={styles.posterWrapper}>
                       <Image
                         source={{ uri: s.posterUrl ?? '' }}
-                        style={styles.seriesPoster}
+                        style={styles.seriesPoster as any}
                         contentFit="cover"
                         transition={300}
                       />
                       <View style={styles.cardBadge}>
                         <Text style={styles.cardBadgeText}>S1-S{s.numberOfSeasons}</Text>
+                      </View>
+                      <View style={styles.playOverlay}>
+                        <View style={styles.playCircle}>
+                          <Ionicons name="play" size={18} color="#ffffff" />
+                        </View>
                       </View>
                       <LinearGradient
                         colors={['transparent', 'rgba(10,10,15,0.92)']}
@@ -304,83 +470,30 @@ export default function HomeScreen() {
             </View>
           )}
 
-          {/* Other Series Section (Grimm, etc.) */}
-          {otherSeries.length > 0 && (
+          {/* Section: Películas en Google Drive */}
+          {showMovies && DRIVE_MOVIES.length > 0 && (
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <View>
                   <View style={styles.sectionTitleRow}>
-                    <Ionicons name="tv" size={22} color="#a855f7" />
-                    <Text style={styles.sectionTitle}>Más Series Disponibles</Text>
-                  </View>
-                  <Text style={styles.sectionSubtitle}>
-                    Series completas con todas sus temporadas y episodios en Español Latino Full HD
-                  </Text>
-                </View>
-              </View>
-
-              {/* Responsive Grid for Other Series */}
-              <View style={styles.cardGrid}>
-                {otherSeries.map((s) => (
-                  <Pressable
-                    key={s.id}
-                    style={({ hovered }: any) => [
-                      styles.seriesCard,
-                      isDesktop && styles.seriesCardDesktop,
-                      hovered && styles.cardHovered,
-                    ]}
-                    onPress={() => router.push(`/series/${s.id}`)}
-                  >
-                    <View style={styles.posterWrapper}>
-                      <Image
-                        source={{ uri: s.posterUrl ?? '' }}
-                        style={styles.seriesPoster}
-                        contentFit="cover"
-                        transition={300}
-                      />
-                      <View style={styles.cardBadge}>
-                        <Text style={styles.cardBadgeText}>S1-S{s.numberOfSeasons}</Text>
-                      </View>
-                      <LinearGradient
-                        colors={['transparent', 'rgba(10,10,15,0.92)']}
-                        style={styles.cardGradient}
-                      >
-                        <Text style={styles.cardTitle} numberOfLines={1}>
-                          {s.name}
-                        </Text>
-                        <Text style={styles.cardEpisodes}>
-                          {s.numberOfEpisodes} episodios
-                        </Text>
-                      </LinearGradient>
+                    <View style={styles.sectionIconBadgePink}>
+                      <Ionicons name="film" size={18} color="#ec4899" />
                     </View>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-          )}
-
-          {/* Google Drive Movies Section */}
-          {DRIVE_MOVIES.length > 0 && (
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <View>
-                  <View style={styles.sectionTitleRow}>
-                    <Ionicons name="film" size={22} color="#ec4899" />
                     <Text style={styles.sectionTitle}>Películas en Google Drive</Text>
                   </View>
                   <Text style={styles.sectionSubtitle}>
-                    Películas completas con sinopsis oficial en español, tráiler y streaming directo en 1080p
+                    Películas completas con sinopsis oficial, tráiler de cine y reproductor Drive Full HD 1080p.
                   </Text>
                 </View>
               </View>
 
-              <View style={styles.cardGrid}>
+              <View style={styles.gridContainer as any}>
                 {DRIVE_MOVIES.map((m) => (
                   <Pressable
                     key={m.id}
                     style={({ hovered }: any) => [
                       styles.seriesCard,
-                      isDesktop && styles.seriesCardDesktop,
+                      Platform.OS !== 'web' && { width: nativeCardWidth as any },
                       hovered && styles.cardHovered,
                     ]}
                     onPress={() => router.push(`/movie/${m.id}` as any)}
@@ -388,12 +501,18 @@ export default function HomeScreen() {
                     <View style={styles.posterWrapper}>
                       <Image
                         source={{ uri: m.posterUrl ?? '' }}
-                        style={styles.seriesPoster}
+                        style={styles.seriesPoster as any}
                         contentFit="cover"
                         transition={300}
                       />
-                      <View style={[styles.cardBadge, { backgroundColor: 'rgba(236, 72, 153, 0.9)' }]}>
+                      <View style={[styles.cardBadge, styles.badgePink]}>
+                        <Ionicons name="logo-google" size={10} color="#ffffff" style={{ marginRight: 3 }} />
                         <Text style={styles.cardBadgeText}>Cine Drive</Text>
+                      </View>
+                      <View style={styles.playOverlay}>
+                        <View style={[styles.playCircle, styles.playCirclePink]}>
+                          <Ionicons name="play" size={18} color="#ffffff" />
+                        </View>
                       </View>
                       <LinearGradient
                         colors={['transparent', 'rgba(10,10,15,0.95)']}
@@ -402,8 +521,80 @@ export default function HomeScreen() {
                         <Text style={styles.cardTitle} numberOfLines={1}>
                           {m.title}
                         </Text>
+                        <View style={styles.movieMetaRow}>
+                          <Text style={styles.cardEpisodes}>{m.year}</Text>
+                          <Text style={styles.metaDot}>•</Text>
+                          <Text style={styles.cardQualityBadge}>1080p</Text>
+                          {m.voteAverage && (
+                            <>
+                              <Text style={styles.metaDot}>•</Text>
+                              <View style={styles.ratingBadge}>
+                                <Ionicons name="star" size={10} color="#fbbf24" />
+                                <Text style={styles.ratingBadgeText}>{m.voteAverage}</Text>
+                              </View>
+                            </>
+                          )}
+                        </View>
+                      </LinearGradient>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Section: Más Series Disponibles (Grimm, etc.) */}
+          {showSeries && otherSeries.length > 0 && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <View>
+                  <View style={styles.sectionTitleRow}>
+                    <View style={styles.sectionIconBadgePurple}>
+                      <Ionicons name="tv" size={18} color="#a855f7" />
+                    </View>
+                    <Text style={styles.sectionTitle}>Más Series Disponibles</Text>
+                  </View>
+                  <Text style={styles.sectionSubtitle}>
+                    Series completas con todas sus temporadas y episodios en Español Latino Full HD.
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.gridContainer as any}>
+                {otherSeries.map((s) => (
+                  <Pressable
+                    key={s.id}
+                    style={({ hovered }: any) => [
+                      styles.seriesCard,
+                      Platform.OS !== 'web' && { width: nativeCardWidth as any },
+                      hovered && styles.cardHovered,
+                    ]}
+                    onPress={() => router.push(`/series/${s.id}`)}
+                  >
+                    <View style={styles.posterWrapper}>
+                      <Image
+                        source={{ uri: s.posterUrl ?? '' }}
+                        style={styles.seriesPoster as any}
+                        contentFit="cover"
+                        transition={300}
+                      />
+                      <View style={styles.cardBadge}>
+                        <Text style={styles.cardBadgeText}>S1-S{s.numberOfSeasons}</Text>
+                      </View>
+                      <View style={styles.playOverlay}>
+                        <View style={styles.playCircle}>
+                          <Ionicons name="play" size={18} color="#ffffff" />
+                        </View>
+                      </View>
+                      <LinearGradient
+                        colors={['transparent', 'rgba(10,10,15,0.92)']}
+                        style={styles.cardGradient}
+                      >
+                        <Text style={styles.cardTitle} numberOfLines={1}>
+                          {s.name}
+                        </Text>
                         <Text style={styles.cardEpisodes}>
-                          {m.year} · {m.quality}
+                          {s.numberOfEpisodes} episodios
                         </Text>
                       </LinearGradient>
                     </View>
@@ -413,16 +604,18 @@ export default function HomeScreen() {
             </View>
           )}
 
-          {/* AI Recommendations Section */}
-          {recommendations.length > 0 && (
-            <View style={[styles.section, { marginBottom: 100 }]}>
+          {/* Section: Recomendados por Inteligencia Artificial */}
+          {showRecs && recommendations.length > 0 && (
+            <View style={[styles.section, { marginBottom: 40 }]}>
               <View style={styles.sectionHeader}>
                 <View style={styles.sectionTitleRow}>
-                  <Ionicons name="sparkles" size={20} color="#38bdf8" />
+                  <View style={styles.sectionIconBadgeBlue}>
+                    <Ionicons name="sparkles" size={18} color="#38bdf8" />
+                  </View>
                   <Text style={styles.sectionTitle}>Recomendado por IA</Text>
                 </View>
                 <Text style={styles.sectionSubtitle}>
-                  Sugerencias personalizadas basadas en tus preferencias
+                  Sugerencias personalizadas basadas en tus gustos y universos seguidos.
                 </Text>
               </View>
 
@@ -446,7 +639,7 @@ export default function HomeScreen() {
                           ? `https://image.tmdb.org/t/p/w342${rec.poster_path}`
                           : '',
                       }}
-                      style={styles.recPoster}
+                      style={styles.recPoster as any}
                       contentFit="cover"
                       transition={300}
                     />
@@ -479,11 +672,11 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0a0f',
+    backgroundColor: '#09090f',
   },
   loaderContainer: {
     flex: 1,
-    backgroundColor: '#0a0a0f',
+    backgroundColor: '#09090f',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 12,
@@ -491,97 +684,158 @@ const styles = StyleSheet.create({
   loaderTitle: {
     color: '#f1f5f9',
     fontSize: 18,
-    fontWeight: '700',
-    fontFamily: Platform.OS === 'web' ? 'Inter, sans-serif' : undefined,
+    fontWeight: '800',
   },
   loaderSub: {
     color: '#64748b',
     fontSize: 14,
   },
   scrollContent: {
-    paddingBottom: 110,
+    paddingBottom: 130, // Clearance for bottom floating navigation bar
   },
   mainWrapper: {
     width: '100%',
     paddingHorizontal: 16,
   },
   desktopWrapper: {
-    maxWidth: 1240,
+    maxWidth: 1320,
     alignSelf: 'center',
     paddingHorizontal: 32,
   },
-  header: {
+  welcomeBanner: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 20,
+    gap: 16,
+    paddingVertical: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+    marginBottom: 16,
   },
-  brandBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
+  welcomeLeft: {
+    flex: 1,
+    minWidth: 260,
   },
-  brandBadgeText: {
-    color: '#a855f7',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: '#f8fafc',
-    letterSpacing: -0.5,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  searchActionBtn: {
+  greetingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 20,
+  },
+  greetingEmoji: {
+    fontSize: 22,
+  },
+  greetingTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#ffffff',
+    letterSpacing: -0.4,
+  },
+  greetingSubtitle: {
+    fontSize: 13,
+    color: '#94a3b8',
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  statsPillRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  statPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(168, 85, 247, 0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(168, 85, 247, 0.3)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  statPillPink: {
+    backgroundColor: 'rgba(236, 72, 153, 0.12)',
+    borderColor: 'rgba(236, 72, 153, 0.3)',
+  },
+  statPillGreen: {
+    backgroundColor: 'rgba(74, 222, 128, 0.12)',
+    borderColor: 'rgba(74, 222, 128, 0.3)',
+  },
+  statPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#f8fafc',
+  },
+  filterBarWrapper: {
+    marginVertical: 10,
+  },
+  filterBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  filterTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     cursor: 'pointer' as any,
   },
-  btnHovered: {
-    backgroundColor: 'rgba(168,85,247,0.18)',
-    borderColor: 'rgba(168,85,247,0.4)',
+  filterTabActive: {
+    backgroundColor: '#7c3aed',
+    borderColor: '#a855f7',
+    shadowColor: '#7c3aed',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 4,
   },
-  searchActionText: {
-    color: '#e2e8f0',
+  filterTabText: {
+    color: '#94a3b8',
     fontSize: 13,
     fontWeight: '600',
   },
+  filterTabTextActive: {
+    color: '#ffffff',
+    fontWeight: '800',
+  },
   heroSection: {
-    marginVertical: 12,
+    marginVertical: 16,
   },
   heroCard: {
-    height: 340,
-    borderRadius: 24,
+    height: 350,
+    borderRadius: 26,
     overflow: 'hidden',
     backgroundColor: '#161622',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
     cursor: 'pointer' as any,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.5,
+    shadowRadius: 28,
+    elevation: 8,
+  },
+  heroCardTablet: {
+    height: 400,
   },
   heroCardDesktop: {
-    height: 420,
+    height: 460,
   },
   heroCardHovered: {
-    borderColor: 'rgba(168,85,247,0.5)',
+    borderColor: 'rgba(168, 85, 247, 0.6)',
     shadowColor: '#a855f7',
-    shadowOffset: { width: 0, height: 12 },
+    shadowOffset: { width: 0, height: 16 },
     shadowOpacity: 0.35,
-    shadowRadius: 20,
-    elevation: 8,
+    shadowRadius: 30,
+    elevation: 12,
   },
   heroImage: {
     width: '100%',
@@ -597,15 +851,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginBottom: 10,
+    marginBottom: 12,
+  },
+  heroFeaturePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(251, 191, 36, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(251, 191, 36, 0.4)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  heroFeatureText: {
+    color: '#fde047',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
   },
   chicagoTag: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: 'rgba(249,115,22,0.2)',
+    backgroundColor: 'rgba(249, 115, 22, 0.2)',
     borderWidth: 1,
-    borderColor: 'rgba(249,115,22,0.4)',
+    borderColor: 'rgba(249, 115, 22, 0.4)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
@@ -616,13 +887,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   seasonTag: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
   },
   seasonTagText: {
-    color: '#94a3b8',
+    color: '#e2e8f0',
     fontSize: 11,
     fontWeight: '600',
   },
@@ -633,16 +904,19 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     letterSpacing: -0.5,
   },
+  heroTitleTablet: {
+    fontSize: 34,
+  },
   heroTitleDesktop: {
-    fontSize: 38,
-    maxWidth: 700,
+    fontSize: 42,
+    maxWidth: 760,
   },
   heroProgressBox: {
-    backgroundColor: 'rgba(15,15,24,0.6)',
+    backgroundColor: 'rgba(15, 15, 24, 0.75)',
     padding: 12,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     maxWidth: 500,
     marginBottom: 16,
   },
@@ -664,29 +938,50 @@ const styles = StyleSheet.create({
   progressBar: {
     height: 6,
     borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   heroActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    flexWrap: 'wrap',
   },
   playBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     backgroundColor: '#7c3aed',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 22,
     borderRadius: 16,
+    shadowColor: '#7c3aed',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
   },
   playBtnText: {
     color: '#ffffff',
-    fontWeight: '700',
+    fontWeight: '800',
     fontSize: 14,
   },
+  detailsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    paddingVertical: 11,
+    paddingHorizontal: 18,
+    borderRadius: 16,
+  },
+  detailsBtnText: {
+    color: '#e2e8f0',
+    fontWeight: '700',
+    fontSize: 13,
+  },
   section: {
-    marginTop: 32,
+    marginTop: 34,
   },
   sectionHeader: {
     marginBottom: 16,
@@ -694,47 +989,93 @@ const styles = StyleSheet.create({
   sectionTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     marginBottom: 4,
   },
+  sectionIconBadgeOrange: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: 'rgba(249, 115, 22, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(249, 115, 22, 0.3)',
+  },
+  sectionIconBadgePink: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: 'rgba(236, 72, 153, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(236, 72, 153, 0.3)',
+  },
+  sectionIconBadgePurple: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: 'rgba(168, 85, 247, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(168, 85, 247, 0.3)',
+  },
+  sectionIconBadgeBlue: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.3)',
+  },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: '800',
+    fontSize: 21,
+    fontWeight: '900',
     color: '#f8fafc',
-    letterSpacing: -0.3,
+    letterSpacing: -0.4,
   },
   sectionSubtitle: {
     color: '#94a3b8',
     fontSize: 13,
-    maxWidth: 650,
+    maxWidth: 700,
+    lineHeight: 18,
+    marginTop: 2,
   },
-  cardGrid: {
+  // Responsive Grid styling
+  gridContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 16,
-  },
+    width: '100%',
+    ...(Platform.OS === 'web'
+      ? ({
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(185px, 1fr))',
+          gap: 18,
+        } as any)
+      : {}),
+  } as any,
   seriesCard: {
-    width: '47%',
-    minWidth: 150,
-    borderRadius: 18,
+    borderRadius: 20,
     overflow: 'hidden',
-    backgroundColor: '#161622',
+    backgroundColor: '#13131f',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     cursor: 'pointer' as any,
-  },
-  seriesCardDesktop: {
-    width: '18.5%', // 5 columns on desktop!
-    minWidth: 180,
-  },
+    ...(Platform.OS === 'web' ? ({ transition: 'all 0.25s ease' } as any) : {}),
+  } as any,
   cardHovered: {
-    transform: [{ translateY: -4 }] as any,
-    borderColor: 'rgba(168,85,247,0.5)',
+    transform: [{ translateY: -6 }] as any,
+    borderColor: 'rgba(168, 85, 247, 0.6)',
     shadowColor: '#7c3aed',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.45,
+    shadowRadius: 20,
+    elevation: 8,
   },
   posterWrapper: {
     width: '100%',
@@ -749,48 +1090,119 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 10,
     right: 10,
-    backgroundColor: 'rgba(10,10,15,0.75)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(10, 10, 16, 0.82)',
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    zIndex: 2,
+  },
+  badgePink: {
+    backgroundColor: 'rgba(219, 39, 119, 0.88)',
+    borderColor: 'rgba(244, 114, 182, 0.4)',
   },
   cardBadgeText: {
-    color: '#e2e8f0',
+    color: '#ffffff',
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  playOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+    opacity: 0,
+    ...(Platform.OS === 'web'
+      ? {
+          transition: 'opacity 0.2s ease',
+          ':hover': { opacity: 1 },
+        }
+      : {}),
+  },
+  playCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(124, 58, 237, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#ffffff',
+    shadowColor: '#7c3aed',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+  },
+  playCirclePink: {
+    backgroundColor: 'rgba(236, 72, 153, 0.85)',
   },
   cardGradient: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    padding: 12,
+    padding: 14,
     justifyContent: 'flex-end',
+    zIndex: 2,
   },
   cardTitle: {
     color: '#ffffff',
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: -0.2,
   },
   cardEpisodes: {
     color: '#94a3b8',
     fontSize: 11,
-    marginTop: 2,
+    fontWeight: '600',
+    marginTop: 3,
+  },
+  movieMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 3,
+    flexWrap: 'wrap',
+  },
+  metaDot: {
+    color: '#64748b',
+    fontSize: 10,
+    marginHorizontal: 4,
+  },
+  cardQualityBadge: {
+    color: '#4ade80',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  ratingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  ratingBadgeText: {
+    color: '#fbbf24',
+    fontSize: 11,
+    fontWeight: '700',
   },
   horizontalScroll: {
-    gap: 14,
-    paddingVertical: 4,
+    gap: 16,
+    paddingVertical: 6,
   },
   recCard: {
-    width: 150,
+    width: 155,
     aspectRatio: 2 / 3,
-    borderRadius: 16,
+    borderRadius: 18,
     overflow: 'hidden',
-    backgroundColor: '#161622',
+    backgroundColor: '#13131f',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     cursor: 'pointer' as any,
   },
   recPoster: {
@@ -800,13 +1212,13 @@ const styles = StyleSheet.create({
   recTitle: {
     color: '#ffffff',
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   ratingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 2,
+    marginTop: 3,
   },
   ratingText: {
     color: '#fbbf24',
