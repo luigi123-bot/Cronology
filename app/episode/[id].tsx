@@ -274,7 +274,7 @@ export default function EpisodeDetailScreen() {
               {prevEpisode && (
                 <Pressable
                   style={styles.adjBtn}
-                  onPress={() => router.push(`/episode/${prevEpisode.id}`)}
+                  onPress={() => router.replace(`/episode/${prevEpisode.id}`)}
                 >
                   <Ionicons name="play-skip-back" size={14} color="#cbd5e1" />
                   <Text style={styles.adjBtnText}>Anterior</Text>
@@ -284,7 +284,7 @@ export default function EpisodeDetailScreen() {
               {nextEpisode && (
                 <Pressable
                   style={styles.adjBtn}
-                  onPress={() => router.push(`/episode/${nextEpisode.id}`)}
+                  onPress={() => router.replace(`/episode/${nextEpisode.id}`)}
                 >
                   <Text style={styles.adjBtnText}>Siguiente</Text>
                   <Ionicons name="play-skip-forward" size={14} color="#cbd5e1" />

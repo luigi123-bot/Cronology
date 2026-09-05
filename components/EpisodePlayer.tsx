@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, Platform, Linking } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { getDriveFileForEpisode } from '@/services/googleDrive';
 
@@ -86,6 +87,60 @@ export default function EpisodePlayer({
   // Drive state: 'loading' | 'ready' | 'processing' | 'error'
   const [driveState, setDriveState] = useState<'loading' | 'ready' | 'processing' | 'error'>('loading');
   const driveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Ref to the active iframe — used to kill audio on unmount/server change
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const isFocused = useIsFocused();
+
+  // Stop all playback when the component unmounts (navigating to another episode or going back)
+  useEffect(() => {
+    return () => {
+      if (Platform.OS === 'web' && iframeRef.current) {
+        try {
+          // Setting src to '' stops the iframe's network activity and audio immediately
+          iframeRef.current.src = 'about:blank';
+        } catch (_) {
+          // ignore cross-origin errors
+        }
+      }
+    };
+  }, []);
+
+  // Stop playback immediately when screen loses focus (navigating to another screen/tab)
+  useEffect(() => {
+    if (!isFocused && Platform.OS === 'web' && iframeRef.current) {
+      try {
+        iframeRef.current.src = 'about:blank';
+      } catch (_) {}
+    }
+  }, [isFocused]);
+
+  // Window unload / pagehide cleanup
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const stopAudio = () => {
+      if (iframeRef.current) {
+        try {
+          iframeRef.current.src = 'about:blank';
+        } catch (_) {}
+      }
+    };
+    window.addEventListener('beforeunload', stopAudio);
+    window.addEventListener('pagehide', stopAudio);
+    return () => {
+      window.removeEventListener('beforeunload', stopAudio);
+      window.removeEventListener('pagehide', stopAudio);
+    };
+  }, []);
+
+  // Also stop the iframe when the user switches servers (old server keeps playing otherwise)
+  const handleSetServer = useCallback((server: StreamServer) => {
+    if (Platform.OS === 'web' && iframeRef.current) {
+      try {
+        iframeRef.current.src = 'about:blank';
+      } catch (_) {}
+    }
+    setCurrentServer(server);
+  }, []);
 
   // Reset drive state on server/episode change — one-shot timer, no loops
   useEffect(() => {
@@ -170,7 +225,7 @@ export default function EpisodePlayer({
   const handleSelectAudio = (mode: AudioMode) => {
     setAudioMode(mode);
     if (mode === 'latino' && driveInfo) {
-      setCurrentServer('gdrive');
+      handleSetServer('gdrive');
     }
   };
 
@@ -247,7 +302,7 @@ export default function EpisodePlayer({
               <Pressable
                 key={opt.id}
                 style={[styles.serverBtn, isActive && styles.serverBtnActive]}
-                onPress={() => setCurrentServer(opt.id)}
+                onPress={() => handleSetServer(opt.id)}
               >
                 <Ionicons
                   name={opt.icon}
@@ -281,7 +336,7 @@ export default function EpisodePlayer({
                 styles.serverBtn,
                 currentServer === 'youtube' && styles.serverBtnActiveYt,
               ]}
-              onPress={() => setCurrentServer('youtube')}
+              onPress={() => handleSetServer('youtube')}
             >
               <Ionicons
                 name="logo-youtube"
@@ -382,7 +437,12 @@ export default function EpisodePlayer({
       {/* Video Player Frame */}
       <View style={[styles.playerFrame, theaterMode && styles.playerFrameTheater]}>
         {Platform.OS === 'web' ? (
-          currentServer === 'gdrive' && driveInfo ? (
+          !isFocused ? (
+            <View style={{ flex: 1, backgroundColor: '#000000', justifyContent: 'center', alignItems: 'center' }}>
+              <Ionicons name="pause-circle-outline" size={42} color="#475569" />
+              <Text style={{ color: '#64748b', fontSize: 13, marginTop: 8 }}>Reproducción detenida</Text>
+            </View>
+          ) : currentServer === 'gdrive' && driveInfo ? (
             driveState === 'processing' ? (
               // Drive still processing — no loop, just a clear message
               <View style={styles.driveProcessingOverlay}>
@@ -403,14 +463,14 @@ export default function EpisodePlayer({
                 </Pressable>
                 <Pressable
                   style={[styles.driveRetryBtn, { backgroundColor: '#7c3aed', marginTop: 8 }]}
-                  onPress={() => setCurrentServer('vidlink')}
+                  onPress={() => handleSetServer('vidlink')}
                 >
                   <Ionicons name="flash" size={15} color="#fff" />
                   <Text style={styles.driveRetryText}>Ver en Inglés con VidLink (disponible ya)</Text>
                 </Pressable>
                 <Pressable
-                  style={[styles.driveRetryBtn, { backgroundColor: '#0f766e', marginTop: 8 }]}
-                  onPress={() => Linking.openURL(`https://drive.google.com/file/d/${driveInfo.fileId}/view`)}
+                  style={[styles.driveRetryBtn, { backgroundColor: '#2563eb', marginTop: 8 }]}
+                  onPress={openExternal}
                 >
                   <Ionicons name="open-outline" size={15} color="#fff" />
                   <Text style={styles.driveRetryText}>Abrir directo en Google Drive</Text>
@@ -429,7 +489,8 @@ export default function EpisodePlayer({
                   </View>
                 )}
                 <iframe
-                  key={refreshKey}
+                  key={`${currentServer}-${seriesTmdbId}-${seasonNumber}-${episodeNumber}-${refreshKey}`}
+                  ref={iframeRef}
                   src={currentUrl}
                   title={`${seriesName} S${seasonNumber}E${episodeNumber} - ${episodeName}`}
                   onLoad={handleDriveLoad}
@@ -447,7 +508,8 @@ export default function EpisodePlayer({
             )
           ) : (
             <iframe
-              key={refreshKey}
+              key={`${currentServer}-${seriesTmdbId}-${seasonNumber}-${episodeNumber}-${refreshKey}`}
+              ref={iframeRef}
               src={currentUrl}
               title={`${seriesName} S${seasonNumber}E${episodeNumber} - ${episodeName}`}
               style={{
