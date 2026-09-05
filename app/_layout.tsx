@@ -45,34 +45,15 @@ export default function RootLayout() {
         <StatusBar style="light" backgroundColor="#0a0a0f" />
         <Stack
           screenOptions={{
-            headerStyle: { backgroundColor: '#0a0a0f' },
-            headerTintColor: '#e2e8f0',
-            headerTitleStyle: {
-              fontFamily: Platform.OS === 'web' ? 'Inter, sans-serif' : 'Inter_700Bold',
-              fontSize: 18,
-            },
+            headerShown: false,
             contentStyle: { backgroundColor: '#0a0a0f' },
-            headerBackTitle: '',
             animation: 'slide_from_right',
           }}
         >
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen
-            name="series/[id]"
-            options={{
-              title: '',
-              headerTransparent: true,
-              headerStyle: { backgroundColor: 'transparent' },
-            }}
-          />
-          <Stack.Screen
-            name="episode/[id]"
-            options={{
-              title: '',
-              headerTransparent: true,
-              headerStyle: { backgroundColor: 'transparent' },
-            }}
-          />
+          <Stack.Screen name="series/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="episode/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="movie/[id]" options={{ headerShown: false }} />
         </Stack>
       </PaperProvider>
     </SafeAreaProvider>
