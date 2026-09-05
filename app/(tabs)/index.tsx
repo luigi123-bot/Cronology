@@ -23,6 +23,7 @@ import { eq, and } from 'drizzle-orm';
 import { getRecommendationsByGenre } from '@/services/tmdb';
 import type { SeriesWithProgress, TMDBSearchResult } from '@/types';
 import WebHeader from '@/components/WebHeader';
+import { DRIVE_MOVIES } from '@/services/googleDriveMovies';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -349,6 +350,60 @@ export default function HomeScreen() {
                         </Text>
                         <Text style={styles.cardEpisodes}>
                           {s.numberOfEpisodes} episodios
+                        </Text>
+                      </LinearGradient>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Google Drive Movies Section */}
+          {DRIVE_MOVIES.length > 0 && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <View>
+                  <View style={styles.sectionTitleRow}>
+                    <Ionicons name="film" size={22} color="#ec4899" />
+                    <Text style={styles.sectionTitle}>Películas en Google Drive</Text>
+                  </View>
+                  <Text style={styles.sectionSubtitle}>
+                    Películas completas con sinopsis oficial en español, tráiler y streaming directo en 1080p
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.cardGrid}>
+                {DRIVE_MOVIES.map((m) => (
+                  <Pressable
+                    key={m.id}
+                    style={({ hovered }: any) => [
+                      styles.seriesCard,
+                      isDesktop && styles.seriesCardDesktop,
+                      hovered && styles.cardHovered,
+                    ]}
+                    onPress={() => router.push(`/movie/${m.id}` as any)}
+                  >
+                    <View style={styles.posterWrapper}>
+                      <Image
+                        source={{ uri: m.posterUrl ?? '' }}
+                        style={styles.seriesPoster}
+                        contentFit="cover"
+                        transition={300}
+                      />
+                      <View style={[styles.cardBadge, { backgroundColor: 'rgba(236, 72, 153, 0.9)' }]}>
+                        <Text style={styles.cardBadgeText}>Cine Drive</Text>
+                      </View>
+                      <LinearGradient
+                        colors={['transparent', 'rgba(10,10,15,0.95)']}
+                        style={styles.cardGradient}
+                      >
+                        <Text style={styles.cardTitle} numberOfLines={1}>
+                          {m.title}
+                        </Text>
+                        <Text style={styles.cardEpisodes}>
+                          {m.year} · {m.quality}
                         </Text>
                       </LinearGradient>
                     </View>

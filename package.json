@@ -16,7 +16,8 @@
     "db:seed": "node --loader ts-node/esm scripts/seed.ts",
     "build:android": "eas build --platform android --profile preview",
     "type-check": "tsc --noEmit",
-    "sync:drive": "node scripts/sync-drive.js"
+    "sync:drive": "node scripts/sync-drive.js",
+    "sync:movies": "node scripts/sync-movies.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1127.0",

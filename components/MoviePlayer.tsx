@@ -1,0 +1,401 @@
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, Pressable, Platform, Linking } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
+
+interface MoviePlayerProps {
+  movieTitle: string;
+  driveFileId: string;
+  quality: string;
+}
+
+export default function MoviePlayer({
+  movieTitle,
+  driveFileId,
+  quality,
+}: MoviePlayerProps) {
+  const [theaterMode, setTheaterMode] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [driveState, setDriveState] = useState<'loading' | 'ready' | 'processing' | 'error'>('loading');
+  const driveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const isFocused = useIsFocused();
+
+  // Stop playback when component unmounts
+  useEffect(() => {
+    return () => {
+      if (Platform.OS === 'web' && iframeRef.current) {
+        try {
+          iframeRef.current.src = 'about:blank';
+        } catch (_) {}
+      }
+    };
+  }, []);
+
+  // Stop playback when screen loses focus
+  useEffect(() => {
+    if (!isFocused && Platform.OS === 'web' && iframeRef.current) {
+      try {
+        iframeRef.current.src = 'about:blank';
+      } catch (_) {}
+    }
+  }, [isFocused]);
+
+  // Window unload / pagehide cleanup
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const stopAudio = () => {
+      if (iframeRef.current) {
+        try {
+          iframeRef.current.src = 'about:blank';
+        } catch (_) {}
+      }
+    };
+    window.addEventListener('beforeunload', stopAudio);
+    window.addEventListener('pagehide', stopAudio);
+    return () => {
+      window.removeEventListener('beforeunload', stopAudio);
+      window.removeEventListener('pagehide', stopAudio);
+    };
+  }, []);
+
+  // Reset drive loading timer on movie/file change
+  useEffect(() => {
+    if (!driveFileId || Platform.OS !== 'web') return;
+    setDriveState('loading');
+    if (driveTimerRef.current) clearTimeout(driveTimerRef.current);
+    driveTimerRef.current = setTimeout(() => {
+      setDriveState(prev => (prev === 'loading' ? 'processing' : prev));
+    }, 25000);
+    return () => {
+      if (driveTimerRef.current) clearTimeout(driveTimerRef.current);
+    };
+  }, [driveFileId]);
+
+  const handleDriveLoad = useCallback(() => {
+    if (driveTimerRef.current) clearTimeout(driveTimerRef.current);
+    setDriveState('ready');
+  }, []);
+
+  const handleDriveRetry = useCallback(() => {
+    setDriveState('loading');
+    setRefreshKey(k => k + 1);
+    if (driveTimerRef.current) clearTimeout(driveTimerRef.current);
+    driveTimerRef.current = setTimeout(() => {
+      setDriveState(prev => (prev === 'loading' ? 'processing' : prev));
+    }, 25000);
+  }, []);
+
+  const handleReload = () => {
+    setRefreshKey(k => k + 1);
+  };
+
+  const currentUrl = `https://drive.google.com/file/d/${driveFileId}/preview?rm=minimal&hd=1`;
+
+  const openExternal = () => {
+    Linking.openURL(`https://drive.google.com/file/d/${driveFileId}/view`);
+  };
+
+  return (
+    <View style={[styles.container, theaterMode && styles.theaterContainer]}>
+      {/* Sleek Minimal Header */}
+      <View style={styles.headerBar}>
+        <View style={styles.headerLeft}>
+          <View style={styles.driveBadge}>
+            <View style={styles.driveDot} />
+            <Ionicons name="logo-google" size={13} color="#4ade80" />
+            <Text style={styles.driveBadgeText}>Google Drive</Text>
+          </View>
+          <Text style={styles.qualityText}>{quality || 'Full HD 1080p'}</Text>
+        </View>
+
+        <View style={styles.headerRight}>
+          <Pressable
+            style={styles.actionBtn}
+            onPress={handleReload}
+            accessibilityLabel="Recargar película"
+          >
+            <Ionicons name="refresh" size={15} color="#94a3b8" />
+          </Pressable>
+
+          {Platform.OS === 'web' && (
+            <Pressable
+              style={styles.actionBtn}
+              onPress={() => setTheaterMode(!theaterMode)}
+              accessibilityLabel="Modo Teatro"
+            >
+              <Ionicons
+                name={theaterMode ? 'contract' : 'expand'}
+                size={15}
+                color="#94a3b8"
+              />
+            </Pressable>
+          )}
+
+          <Pressable
+            style={styles.actionBtn}
+            onPress={openExternal}
+            accessibilityLabel="Abrir en Google Drive"
+          >
+            <Ionicons name="open-outline" size={15} color="#94a3b8" />
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Video Player Frame */}
+      <View style={[styles.playerFrame, theaterMode && styles.playerFrameTheater]}>
+        {Platform.OS === 'web' ? (
+          !isFocused ? (
+            <View style={styles.centeredBox}>
+              <Ionicons name="pause-circle-outline" size={42} color="#475569" />
+              <Text style={styles.pausedText}>Reproducción detenida</Text>
+            </View>
+          ) : driveState === 'processing' ? (
+            <View style={styles.driveProcessingOverlay}>
+              <Ionicons name="cloud-download-outline" size={48} color="#f59e0b" />
+              <Text style={styles.driveProcessingTitle}>⏳ Drive aún está procesando la película</Text>
+              <Text style={styles.driveProcessingText}>
+                Google Drive necesita unos minutos para preparar el streaming en alta definición.
+              </Text>
+              <View style={styles.processingBtnRow}>
+                <Pressable style={styles.driveRetryBtn} onPress={handleDriveRetry}>
+                  <Ionicons name="refresh" size={15} color="#fff" />
+                  <Text style={styles.driveBtnText}>Verificar de nuevo</Text>
+                </Pressable>
+                <Pressable style={[styles.driveRetryBtn, styles.driveDirectBtn]} onPress={openExternal}>
+                  <Ionicons name="open-outline" size={15} color="#fff" />
+                  <Text style={styles.driveBtnText}>Abrir en Google Drive</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <>
+              {driveState === 'loading' && (
+                <View style={styles.driveLoadingOverlay}>
+                  <View style={styles.driveLoadingSpinner}>
+                    <Ionicons name="logo-google" size={26} color="#4ade80" />
+                  </View>
+                  <Text style={styles.driveLoadingText}>Cargando película desde Drive...</Text>
+                </View>
+              )}
+              <iframe
+                key={`movie-${driveFileId}-${refreshKey}`}
+                ref={iframeRef}
+                src={currentUrl}
+                title={movieTitle}
+                onLoad={handleDriveLoad}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  border: 'none',
+                  backgroundColor: '#000000',
+                  display: driveState === 'loading' ? 'none' : 'block',
+                }}
+                allowFullScreen
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              />
+            </>
+          )
+        ) : (
+          <View style={styles.centeredBox}>
+            <Ionicons name="play-circle" size={54} color="#4ade80" />
+            <Text style={styles.notFoundTitle}>Reproducir en Google Drive</Text>
+            <Pressable style={styles.fallbackBtn} onPress={openExternal}>
+              <Text style={styles.fallbackBtnText}>Abrir Video</Text>
+            </Pressable>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    width: '100%',
+    backgroundColor: '#0c0c14',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    overflow: 'hidden',
+    marginVertical: 14,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  theaterContainer: {
+    maxWidth: '100%',
+  },
+  headerBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#12121e',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  driveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(74, 222, 128, 0.12)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(74, 222, 128, 0.3)',
+  },
+  driveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#4ade80',
+  },
+  driveBadgeText: {
+    color: '#86efac',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  qualityText: {
+    color: '#94a3b8',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    cursor: 'pointer' as any,
+  },
+  playerFrame: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    maxHeight: 650,
+    backgroundColor: '#000000',
+    position: 'relative',
+  },
+  playerFrameTheater: {
+    maxHeight: 1080,
+  },
+  centeredBox: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000000',
+    padding: 24,
+    gap: 8,
+  },
+  pausedText: {
+    color: '#64748b',
+    fontSize: 13,
+  },
+  notFoundTitle: {
+    color: '#f8fafc',
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  fallbackBtn: {
+    marginTop: 8,
+    backgroundColor: '#16a34a',
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+  },
+  fallbackBtnText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  driveProcessingOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 28,
+    gap: 12,
+    backgroundColor: 'rgba(15, 10, 5, 0.95)',
+  },
+  driveProcessingTitle: {
+    color: '#fbbf24',
+    fontSize: 17,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  driveProcessingText: {
+    color: '#cbd5e1',
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 20,
+    maxWidth: 380,
+  },
+  processingBtnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 8,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
+  driveRetryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#d97706',
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    cursor: 'pointer' as any,
+  },
+  driveDirectBtn: {
+    backgroundColor: '#2563eb',
+  },
+  driveBtnText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  driveLoadingOverlay: {
+    position: 'absolute' as any,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000000',
+    gap: 12,
+    zIndex: 10,
+  },
+  driveLoadingSpinner: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(74, 222, 128, 0.12)',
+    borderWidth: 2,
+    borderColor: 'rgba(74, 222, 128, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  driveLoadingText: {
+    color: '#e2e8f0',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+});
