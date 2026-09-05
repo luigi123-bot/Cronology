@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, Platform, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getDriveFileForEpisode } from '@/services/googleDrive';
@@ -77,18 +77,34 @@ export default function EpisodePlayer({
 }: EpisodePlayerProps) {
   const driveInfo = getDriveFileForEpisode(seriesName, seasonNumber, episodeNumber);
 
-  // If this episode has an official stream, default to 'gdrive'
   const [currentServer, setCurrentServer] = useState<StreamServer>(
     driveInfo ? 'gdrive' : 'vidlink'
   );
   const [audioMode, setAudioMode] = useState<AudioMode>('latino');
   const [theaterMode, setTheaterMode] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  // Drive error state: true = Drive is still processing, switch to fallback
+  const [driveError, setDriveError] = useState(false);
+  const driveVideoRef = useRef<HTMLVideoElement>(null);
+
+  // Auto-fallback: if Drive video can't load after 8s, switch to VidLink
+  useEffect(() => {
+    if (currentServer !== 'gdrive' || !driveInfo || Platform.OS !== 'web') return;
+    setDriveError(false);
+    const timer = setTimeout(() => {
+      const video = driveVideoRef.current;
+      if (video && video.readyState === 0 && video.networkState === 3) {
+        setDriveError(true);
+      }
+    }, 10000);
+    return () => clearTimeout(timer);
+  }, [currentServer, driveInfo, refreshKey]);
 
   const getServerUrl = (server: StreamServer): string => {
     switch (server) {
       case 'gdrive':
-        return driveInfo ? driveInfo.embedUrl : '';
+        // Use direct stream URL (bypasses Drive processing requirement)
+        return driveInfo ? driveInfo.streamUrl : '';
       case 'vidlink':
         return `https://vidlink.pro/tv/${seriesTmdbId}/${seasonNumber}/${episodeNumber}?primaryColor=a855f7&secondaryColor=161622&iconColor=ffffff&title=true&poster=true`;
       case 'videasy':
@@ -331,20 +347,73 @@ export default function EpisodePlayer({
       {/* Video Player Frame */}
       <View style={[styles.playerFrame, theaterMode && styles.playerFrameTheater]}>
         {Platform.OS === 'web' ? (
-          <iframe
-            key={refreshKey}
-            src={currentUrl}
-            title={`${seriesName} S${seasonNumber}E${episodeNumber} - ${episodeName}`}
-            style={{
-              width: '100%',
-              height: '100%',
-              border: 'none',
-              backgroundColor: '#000000',
-            }}
-            loading="lazy"
-            allowFullScreen
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-          />
+          currentServer === 'gdrive' && driveInfo ? (
+            driveError ? (
+              // Drive processing error fallback
+              <View style={styles.driveProcessingOverlay}>
+                <Ionicons name="cloud-download-outline" size={48} color="#f59e0b" />
+                <Text style={styles.driveProcessingTitle}>⏳ Archivo en procesamiento</Text>
+                <Text style={styles.driveProcessingText}>
+                  Google Drive aún está procesando este video en Full HD. Esto puede tardar{' '}
+                  <Text style={{ color: '#fbbf24', fontWeight: '700' }}>30 minutos a algunas horas</Text>{' '}
+                  según el tamaño del archivo.
+                </Text>
+                <Pressable
+                  style={styles.driveRetryBtn}
+                  onPress={() => { setRefreshKey(k => k + 1); setDriveError(false); }}
+                >
+                  <Ionicons name="refresh" size={15} color="#fff" />
+                  <Text style={styles.driveRetryText}>Reintentar</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.driveRetryBtn, { backgroundColor: '#7c3aed', marginTop: 8 }]}
+                  onPress={() => setCurrentServer('vidlink')}
+                >
+                  <Ionicons name="flash" size={15} color="#fff" />
+                  <Text style={styles.driveRetryText}>Usar VidLink Ultra en su lugar</Text>
+                </Pressable>
+              </View>
+            ) : (
+              // Native HTML5 video player - no transcoding needed
+              <video
+                key={refreshKey}
+                ref={driveVideoRef}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  backgroundColor: '#000',
+                }}
+                controls
+                autoPlay={false}
+                preload="metadata"
+                onError={() => setDriveError(true)}
+                onStalled={() => {
+                  // If stalled immediately with no data, it's likely still processing
+                  const v = driveVideoRef.current;
+                  if (v && v.readyState === 0) setDriveError(true);
+                }}
+              >
+                <source src={currentUrl} type="video/x-matroska" />
+                <source src={currentUrl} type="video/mp4" />
+                Tu navegador no soporta reproducción de video HTML5.
+              </video>
+            )
+          ) : (
+            <iframe
+              key={refreshKey}
+              src={currentUrl}
+              title={`${seriesName} S${seasonNumber}E${episodeNumber} - ${episodeName}`}
+              style={{
+                width: '100%',
+                height: '100%',
+                border: 'none',
+                backgroundColor: '#000000',
+              }}
+              loading="lazy"
+              allowFullScreen
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            />
+          )
         ) : (
           <View style={styles.mobileFallback}>
             <Ionicons name="play-circle" size={54} color="#a855f7" />
@@ -656,5 +725,43 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 11,
     flex: 1,
+  },
+  driveProcessingOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 28,
+    gap: 12,
+    backgroundColor: 'rgba(15, 10, 5, 0.95)',
+  },
+  driveProcessingTitle: {
+    color: '#fbbf24',
+    fontSize: 18,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  driveProcessingText: {
+    color: '#cbd5e1',
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 20,
+    maxWidth: 400,
+  },
+  driveRetryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 16,
+    backgroundColor: '#d97706',
+    paddingVertical: 10,
+    paddingHorizontal: 22,
+    borderRadius: 14,
+    cursor: 'pointer' as any,
+  },
+  driveRetryText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 14,
   },
 });

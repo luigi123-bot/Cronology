@@ -21,7 +21,46 @@ export const GRIMM_DRIVE_EPISODES: Record<string, { fileId: string; title: strin
     title: 'Grimm.1x02.HD1080p-lat.mkv',
     quality: '1080p HD Latino',
   },
+  'grimm-s1e3': {
+    fileId: '1cbPeKMJx7W5Pv5WzpkryEuLdPq9llycv',
+    title: 'Grimm.1x03.HD1080p-lat.mkv',
+    quality: '1080p HD Latino',
+  },
+  'grimm-s1e4': {
+    fileId: '1mV6Ir5IEfEjDyAR4mr4o2GdgrYiP-8qq',
+    title: 'Grimm.1x04.HD1080p-lat.mkv',
+    quality: '1080p HD Latino',
+  },
+  'grimm-s1e5': {
+    fileId: '1hF9Vya-t8KuJD8iuqYeM_k_kKlZRkCAF',
+    title: 'Grimm.1x05.HD1080p-lat.mkv',
+    quality: '1080p HD Latino',
+  },
+  'grimm-s1e6': {
+    fileId: '1GFrta7R5cRQLfW0RcLwk7jUoZAAMVZgY',
+    title: 'Grimm.1x06.HD1080p-lat.mkv',
+    quality: '1080p HD Latino',
+  },
+  'grimm-s1e7': {
+    fileId: '1bc4dBKx5vUOCgSILFDBo554q-mz01Hjp',
+    title: 'Grimm.1x07.HD1080p-lat.mkv',
+    quality: '1080p HD Latino',
+  },
+  'grimm-s1e8': {
+    fileId: '1-95Yez-3chUZK_t_BkkiDYgFMYaGMqVL',
+    title: 'Grimm.1x08.HD1080p-lat.mkv',
+    quality: '1080p HD Latino',
+  },
 };
+
+/**
+ * URL de streaming directo de Google Drive (bypasea el procesamiento de /preview)
+ * Funciona para archivos compartidos públicamente sin necesidad de transcoding
+ */
+export function getDriveStreamUrl(fileId: string): string {
+  // Esta URL permite streaming parcial (Range requests) directo sin necesitar procesamiento
+  return `https://drive.google.com/uc?export=download&id=${fileId}&confirm=t`;
+}
 
 /**
  * Obtiene el ID del archivo de Google Drive para un episodio específico
@@ -30,7 +69,7 @@ export function getDriveFileForEpisode(
   seriesName: string,
   season: number,
   episode: number
-): { fileId: string; title: string; quality: string; embedUrl: string } | null {
+): { fileId: string; title: string; quality: string; embedUrl: string; streamUrl: string } | null {
   const norm = seriesName.toLowerCase().trim();
   if (norm.includes('grimm')) {
     const key = `grimm-s${season}e${episode}`;
@@ -38,7 +77,10 @@ export function getDriveFileForEpisode(
     if (info) {
       return {
         ...info,
+        // /preview requiere que Google transcodifique el video (puede tardar horas para MKV)
         embedUrl: `https://drive.google.com/file/d/${info.fileId}/preview`,
+        // streamUrl usa el reproductor HTML5 nativo: carga directo sin procesar
+        streamUrl: getDriveStreamUrl(info.fileId),
       };
     }
   }
