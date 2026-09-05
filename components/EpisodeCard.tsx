@@ -9,17 +9,25 @@ const STILL_HEIGHT = 76;
 
 interface EpisodeCardProps {
   episode: EpisodeWithProgress;
+  isCurrent?: boolean;
   onToggleWatched: () => void;
   onPress: () => void;
 }
 
-export default function EpisodeCard({ episode, onToggleWatched, onPress }: EpisodeCardProps) {
+export default function EpisodeCard({
+  episode,
+  isCurrent,
+  onToggleWatched,
+  onPress,
+}: EpisodeCardProps) {
   const epCode = `E${String(episode.episodeNumber).padStart(2, '0')}`;
 
   return (
     <Pressable
       style={({ hovered }: any) => [
         styles.card,
+        isCurrent && styles.cardCurrent,
+        episode.watched && styles.cardWatched,
         hovered && styles.cardHovered,
       ]}
       onPress={onPress}
@@ -41,14 +49,14 @@ export default function EpisodeCard({ episode, onToggleWatched, onPress }: Episo
 
         {/* Play icon overlay */}
         <View style={styles.playOverlay}>
-          <View style={styles.playCircle}>
+          <View style={[styles.playCircle, isCurrent && styles.playCircleCurrent]}>
             <Ionicons name="play" size={14} color="#ffffff" />
           </View>
         </View>
 
         {episode.watched && (
           <View style={styles.watchedOverlay}>
-            <Ionicons name="checkmark-circle" size={26} color="#22c55e" />
+            <Ionicons name="checkmark-circle" size={28} color="#22c55e" />
           </View>
         )}
 
@@ -62,9 +70,24 @@ export default function EpisodeCard({ episode, onToggleWatched, onPress }: Episo
       {/* Info Section */}
       <View style={styles.info}>
         <View style={styles.titleLine}>
-          <View style={styles.epPill}>
-            <Text style={styles.epCode}>{epCode}</Text>
+          <View style={[styles.epPill, isCurrent && styles.epPillCurrent]}>
+            <Text style={[styles.epCode, isCurrent && styles.epCodeCurrent]}>{epCode}</Text>
           </View>
+
+          {isCurrent && (
+            <View style={styles.currentBadge}>
+              <Ionicons name="location" size={10} color="#c084fc" />
+              <Text style={styles.currentBadgeText}>Capítulo actual</Text>
+            </View>
+          )}
+
+          {episode.watched && (
+            <View style={styles.watchedBadge}>
+              <Ionicons name="checkmark" size={11} color="#4ade80" />
+              <Text style={styles.watchedBadgeText}>Visto</Text>
+            </View>
+          )}
+
           <Text style={styles.name} numberOfLines={1}>
             {episode.name}
           </Text>
@@ -91,18 +114,22 @@ export default function EpisodeCard({ episode, onToggleWatched, onPress }: Episo
 
       {/* Watched Toggle Button */}
       <Pressable
-        style={styles.watchBtn}
+        style={[styles.watchBtn, episode.watched && styles.watchBtnActive]}
         onPress={(e) => {
           e.stopPropagation?.();
           onToggleWatched();
         }}
+        accessibilityLabel={episode.watched ? "Marcar como no visto" : "Marcar como visto"}
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       >
         <Ionicons
           name={episode.watched ? 'checkmark-circle' : 'checkmark-circle-outline'}
           size={24}
-          color={episode.watched ? '#22c55e' : '#475569'}
+          color={episode.watched ? '#22c55e' : '#64748b'}
         />
+        <Text style={[styles.watchBtnLabel, episode.watched && styles.watchBtnLabelActive]}>
+          {episode.watched ? 'Visto' : 'Marcar'}
+        </Text>
       </Pressable>
     </Pressable>
   );
@@ -126,6 +153,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#171726',
     borderColor: 'rgba(168, 85, 247, 0.4)',
     transform: [{ translateX: 4 }] as any,
+  },
+  cardCurrent: {
+    backgroundColor: 'rgba(168, 85, 247, 0.1)',
+    borderColor: 'rgba(168, 85, 247, 0.6)',
+    shadowColor: '#a855f7',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  cardWatched: {
+    opacity: 0.85,
+    borderColor: 'rgba(34, 197, 94, 0.25)',
   },
   stillContainer: {
     width: STILL_WIDTH,
@@ -164,13 +204,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingLeft: 2,
   },
+  playCircleCurrent: {
+    backgroundColor: '#a855f7',
+    transform: [{ scale: 1.1 }] as any,
+  },
   watchedOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(10, 10, 15, 0.7)',
+    backgroundColor: 'rgba(10, 10, 15, 0.65)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -190,6 +234,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flexWrap: 'wrap',
   },
   epPill: {
     backgroundColor: 'rgba(168, 85, 247, 0.15)',
@@ -197,9 +242,47 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 6,
   },
+  epPillCurrent: {
+    backgroundColor: '#7c3aed',
+  },
   epCode: {
     color: '#c084fc',
     fontSize: 11,
+    fontWeight: '800',
+  },
+  epCodeCurrent: {
+    color: '#ffffff',
+  },
+  currentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(168, 85, 247, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(168, 85, 247, 0.4)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  currentBadgeText: {
+    color: '#d8b4fe',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  watchedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(34, 197, 94, 0.35)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  watchedBadgeText: {
+    color: '#4ade80',
+    fontSize: 10,
     fontWeight: '800',
   },
   name: {
@@ -228,8 +311,28 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   watchBtn: {
-    padding: 6,
-    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     cursor: 'pointer' as any,
+    minWidth: 46,
+  },
+  watchBtnActive: {
+    backgroundColor: 'rgba(34, 197, 94, 0.12)',
+    borderColor: 'rgba(34, 197, 94, 0.3)',
+  },
+  watchBtnLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#64748b',
+    marginTop: 2,
+  },
+  watchBtnLabelActive: {
+    color: '#4ade80',
   },
 });

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -18,22 +18,38 @@ import { ProgressBar } from 'react-native-paper';
 import { useStore } from '@/store/useStore';
 import type { SeriesWithProgress } from '@/types';
 import WebHeader from '@/components/WebHeader';
+import {
+  getAllSeriesCurrentEpisodes,
+  type SeriesCurrentProgress,
+} from '@/services/watchProgress';
 
-function SeriesCardItem({ item, isDesktop }: { item: SeriesWithProgress; isDesktop: boolean }) {
+type SeriesFilter = 'all' | 'in_progress' | 'completed' | 'unstarted';
+
+function SeriesCardItem({
+  item,
+  currentProgress,
+  nativeWidth,
+}: {
+  item: SeriesWithProgress;
+  currentProgress?: SeriesCurrentProgress;
+  nativeWidth: any;
+}) {
   const router = useRouter();
 
-  const statusColor =
-    item.progressPercent === 100
-      ? '#22c55e'
-      : item.progressPercent > 0
-      ? '#a855f7'
-      : '#64748b';
+  const isCompleted = item.progressPercent === 100;
+  const isInProgress = item.progressPercent > 0 || !!currentProgress;
+
+  const statusColor = isCompleted
+    ? '#22c55e'
+    : isInProgress
+    ? '#a855f7'
+    : '#64748b';
 
   return (
     <Pressable
       style={({ hovered }: any) => [
         styles.card,
-        isDesktop && styles.cardDesktop,
+        Platform.OS !== 'web' && { width: nativeWidth },
         hovered && styles.cardHovered,
       ]}
       onPress={() => router.push(`/series/${item.id}`)}
@@ -42,13 +58,30 @@ function SeriesCardItem({ item, isDesktop }: { item: SeriesWithProgress; isDeskt
         {item.posterUrl ? (
           <Image
             source={{ uri: item.posterUrl }}
-            style={styles.poster}
+            style={styles.poster as any}
             contentFit="cover"
             transition={300}
           />
         ) : (
           <View style={[styles.poster, styles.posterPlaceholder]}>
             <Ionicons name="tv-outline" size={36} color="#475569" />
+          </View>
+        )}
+
+        {/* Current Episode Pill */}
+        {currentProgress && !isCompleted && (
+          <View style={styles.currentEpisodeBadge}>
+            <Ionicons name="location" size={10} color="#ffffff" />
+            <Text style={styles.currentEpisodeBadgeText}>
+              T{currentProgress.seasonNumber}:E{currentProgress.episodeNumber}
+            </Text>
+          </View>
+        )}
+
+        {isCompleted && (
+          <View style={styles.completedBadge}>
+            <Ionicons name="checkmark-circle" size={11} color="#ffffff" />
+            <Text style={styles.completedBadgeText}>Completada</Text>
           </View>
         )}
 
@@ -74,6 +107,13 @@ function SeriesCardItem({ item, isDesktop }: { item: SeriesWithProgress; isDeskt
             <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
           </View>
 
+          {/* Current episode subtitle hint */}
+          {currentProgress && !isCompleted ? (
+            <Text style={styles.currentEpHint} numberOfLines={1}>
+              Vas por: {currentProgress.episodeName}
+            </Text>
+          ) : null}
+
           <View style={styles.progressContainer}>
             <ProgressBar
               progress={Math.max(item.progressPercent / 100, 0.02)}
@@ -83,10 +123,10 @@ function SeriesCardItem({ item, isDesktop }: { item: SeriesWithProgress; isDeskt
           </View>
 
           <Text style={[styles.progressLabel, { color: statusColor }]}>
-            {item.progressPercent === 100
-              ? '✓ Completado'
-              : item.progressPercent > 0
-              ? `${item.progressPercent}% visto`
+            {isCompleted
+              ? '✓ 100% Completado'
+              : isInProgress
+              ? `${item.progressPercent}% visto (${item.watchedCount}/${item.totalCount} eps)`
               : 'Sin empezar'}
           </Text>
         </LinearGradient>
@@ -100,11 +140,48 @@ export default function SeriesScreen() {
   const { width } = useWindowDimensions();
   const { seriesList } = useStore();
 
-  const isDesktop = width >= 768;
+  const [activeFilter, setActiveFilter] = useState<SeriesFilter>('all');
+
+  const isDesktop = width >= 1024;
+
+  const currentProgressMap = useMemo(() => {
+    return getAllSeriesCurrentEpisodes();
+  }, [seriesList]);
 
   const totalWatched = seriesList.reduce((acc, s) => acc + s.watchedCount, 0);
   const totalEpisodes = seriesList.reduce((acc, s) => acc + (s.totalCount || s.numberOfEpisodes), 0);
   const overallProgress = totalEpisodes > 0 ? Math.round((totalWatched / totalEpisodes) * 100) : 0;
+
+  const inProgressCount = seriesList.filter(
+    (s) => (s.progressPercent > 0 && s.progressPercent < 100) || !!currentProgressMap[s.id]
+  ).length;
+
+  const completedCount = seriesList.filter((s) => s.progressPercent === 100).length;
+
+  // Native responsive card width
+  const nativeCardWidth = useMemo(() => {
+    if (width >= 1200) return '18.4%';
+    if (width >= 800) return '23%';
+    if (width >= 560) return '31%';
+    return '47.6%';
+  }, [width]);
+
+  const filteredSeries = useMemo(() => {
+    if (activeFilter === 'in_progress') {
+      return seriesList.filter(
+        (s) => (s.progressPercent > 0 && s.progressPercent < 100) || !!currentProgressMap[s.id]
+      );
+    }
+    if (activeFilter === 'completed') {
+      return seriesList.filter((s) => s.progressPercent === 100);
+    }
+    if (activeFilter === 'unstarted') {
+      return seriesList.filter(
+        (s) => s.progressPercent === 0 && !currentProgressMap[s.id]
+      );
+    }
+    return seriesList;
+  }, [seriesList, activeFilter, currentProgressMap]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -120,7 +197,7 @@ export default function SeriesScreen() {
             <View>
               <Text style={styles.title}>Mis Series</Text>
               <Text style={styles.subtitle}>
-                Colección personal y seguimiento de episodios
+                Seguimiento automático de tu progreso, capítulos vistos y punto de continuación.
               </Text>
             </View>
             <Pressable
@@ -130,8 +207,8 @@ export default function SeriesScreen() {
               ]}
               onPress={() => router.push('/search')}
             >
-              <Ionicons name="add" size={20} color="#ffffff" />
-              {isDesktop && <Text style={styles.addBtnText}>Agregar Serie</Text>}
+              <Ionicons name="search" size={18} color="#ffffff" />
+              {isDesktop && <Text style={styles.addBtnText}>Explorar Catálogo</Text>}
             </Pressable>
           </View>
 
@@ -142,7 +219,15 @@ export default function SeriesScreen() {
                 <Ionicons name="tv" size={20} color="#a855f7" />
                 <View>
                   <Text style={styles.statNumber}>{seriesList.length}</Text>
-                  <Text style={styles.statLabel}>Series</Text>
+                  <Text style={styles.statLabel}>Series Disponibles</Text>
+                </View>
+              </View>
+
+              <View style={styles.statCard}>
+                <Ionicons name="play-circle" size={20} color="#c084fc" />
+                <View>
+                  <Text style={styles.statNumber}>{inProgressCount}</Text>
+                  <Text style={styles.statLabel}>En Curso</Text>
                 </View>
               </View>
 
@@ -150,15 +235,7 @@ export default function SeriesScreen() {
                 <Ionicons name="checkmark-done-circle" size={20} color="#22c55e" />
                 <View>
                   <Text style={styles.statNumber}>{totalWatched}</Text>
-                  <Text style={styles.statLabel}>Vistos</Text>
-                </View>
-              </View>
-
-              <View style={styles.statCard}>
-                <Ionicons name="film-outline" size={20} color="#38bdf8" />
-                <View>
-                  <Text style={styles.statNumber}>{totalEpisodes}</Text>
-                  <Text style={styles.statLabel}>Episodios Totales</Text>
+                  <Text style={styles.statLabel}>Capítulos Vistos</Text>
                 </View>
               </View>
 
@@ -172,25 +249,111 @@ export default function SeriesScreen() {
             </View>
           )}
 
+          {/* Filter Pills */}
+          <View style={styles.filterPillsRow}>
+            <Pressable
+              style={[
+                styles.filterPill,
+                activeFilter === 'all' && styles.filterPillActive,
+              ]}
+              onPress={() => setActiveFilter('all')}
+            >
+              <Text
+                style={[
+                  styles.filterPillText,
+                  activeFilter === 'all' && styles.filterPillTextActive,
+                ]}
+              >
+                Todas ({seriesList.length})
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.filterPill,
+                activeFilter === 'in_progress' && styles.filterPillActive,
+              ]}
+              onPress={() => setActiveFilter('in_progress')}
+            >
+              <Ionicons
+                name="play"
+                size={12}
+                color={activeFilter === 'in_progress' ? '#fff' : '#c084fc'}
+              />
+              <Text
+                style={[
+                  styles.filterPillText,
+                  activeFilter === 'in_progress' && styles.filterPillTextActive,
+                ]}
+              >
+                En Progreso ({inProgressCount})
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.filterPill,
+                activeFilter === 'completed' && styles.filterPillActive,
+              ]}
+              onPress={() => setActiveFilter('completed')}
+            >
+              <Ionicons
+                name="checkmark"
+                size={12}
+                color={activeFilter === 'completed' ? '#fff' : '#22c55e'}
+              />
+              <Text
+                style={[
+                  styles.filterPillText,
+                  activeFilter === 'completed' && styles.filterPillTextActive,
+                ]}
+              >
+                Completadas ({completedCount})
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.filterPill,
+                activeFilter === 'unstarted' && styles.filterPillActive,
+              ]}
+              onPress={() => setActiveFilter('unstarted')}
+            >
+              <Text
+                style={[
+                  styles.filterPillText,
+                  activeFilter === 'unstarted' && styles.filterPillTextActive,
+                ]}
+              >
+                Sin Empezar
+              </Text>
+            </Pressable>
+          </View>
+
           {/* Series Grid */}
-          <View style={styles.grid}>
-            {seriesList.map((item) => (
-              <SeriesCardItem key={item.id} item={item} isDesktop={isDesktop} />
+          <View style={styles.grid as any}>
+            {filteredSeries.map((item) => (
+              <SeriesCardItem
+                key={item.id}
+                item={item}
+                currentProgress={currentProgressMap[item.id]}
+                nativeWidth={nativeCardWidth}
+              />
             ))}
           </View>
 
-          {seriesList.length === 0 && (
+          {filteredSeries.length === 0 && (
             <View style={styles.emptyState}>
               <Ionicons name="film-outline" size={48} color="#475569" />
-              <Text style={styles.emptyTitle}>No tienes series agregadas</Text>
+              <Text style={styles.emptyTitle}>No hay series en esta categoría</Text>
               <Text style={styles.emptySubtitle}>
-                Busca en el catálogo y añade tus series favoritas
+                Selecciona otra pestaña o explora el catálogo para comenzar una nueva serie.
               </Text>
               <Pressable
                 style={styles.emptyBtn}
-                onPress={() => router.push('/search')}
+                onPress={() => setActiveFilter('all')}
               >
-                <Text style={styles.emptyBtnText}>Explorar Catálogo</Text>
+                <Text style={styles.emptyBtnText}>Ver Todas las Series</Text>
               </Pressable>
             </View>
           )}
@@ -203,17 +366,17 @@ export default function SeriesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0a0f',
+    backgroundColor: '#09090f',
   },
   scrollContent: {
-    paddingBottom: 110,
+    paddingBottom: 130,
   },
   mainWrapper: {
     width: '100%',
     paddingHorizontal: 16,
   },
   desktopWrapper: {
-    maxWidth: 1240,
+    maxWidth: 1320,
     alignSelf: 'center',
     paddingHorizontal: 32,
   },
@@ -232,7 +395,7 @@ const styles = StyleSheet.create({
   subtitle: {
     color: '#94a3b8',
     fontSize: 13,
-    marginTop: 2,
+    marginTop: 4,
   },
   addBtn: {
     flexDirection: 'row',
@@ -240,7 +403,7 @@ const styles = StyleSheet.create({
     gap: 8,
     backgroundColor: '#7c3aed',
     paddingVertical: 10,
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
     borderRadius: 20,
     cursor: 'pointer' as any,
   },
@@ -261,14 +424,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
-    marginBottom: 28,
+    marginBottom: 20,
   },
   statCard: {
     flex: 1,
     minWidth: 140,
-    backgroundColor: '#161622',
+    backgroundColor: '#12121f',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     borderRadius: 18,
     padding: 14,
     flexDirection: 'row',
@@ -283,34 +446,68 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 11,
     color: '#94a3b8',
-    fontWeight: '500',
+    fontWeight: '600',
+  },
+  filterPillsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+    marginBottom: 20,
+  },
+  filterPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 16,
+    cursor: 'pointer' as any,
+  },
+  filterPillActive: {
+    backgroundColor: '#7c3aed',
+    borderColor: '#a855f7',
+  },
+  filterPillText: {
+    color: '#94a3b8',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  filterPillTextActive: {
+    color: '#ffffff',
+    fontWeight: '800',
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 16,
+    width: '100%',
+    ...(Platform.OS === 'web'
+      ? ({
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(185px, 1fr))',
+          gap: 18,
+        } as any)
+      : {}),
   },
   card: {
-    width: '47%',
-    minWidth: 150,
-    borderRadius: 18,
+    borderRadius: 20,
     overflow: 'hidden',
-    backgroundColor: '#161622',
+    backgroundColor: '#13131f',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     cursor: 'pointer' as any,
   },
-  cardDesktop: {
-    width: '18.5%', // 5 columns on desktop!
-    minWidth: 180,
-  },
   cardHovered: {
-    transform: [{ translateY: -4 }] as any,
-    borderColor: 'rgba(168,85,247,0.5)',
+    transform: [{ translateY: -6 }] as any,
+    borderColor: 'rgba(168, 85, 247, 0.6)',
     shadowColor: '#7c3aed',
-    shadowOffset: { width: 0, height: 10 },
+    shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.45,
-    shadowRadius: 18,
+    shadowRadius: 20,
     elevation: 8,
   },
   posterWrapper: {
@@ -327,19 +524,59 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  chicagoBadge: {
+  currentEpisodeBadge: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#7c3aed',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#a855f7',
+    zIndex: 10,
+  },
+  currentEpisodeBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  completedBadge: {
     position: 'absolute',
     top: 10,
     left: 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(10,10,15,0.85)',
+    backgroundColor: 'rgba(34, 197, 94, 0.9)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(249,115,22,0.4)',
+    borderColor: '#4ade80',
+    zIndex: 10,
+  },
+  completedBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  chicagoBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(10, 10, 15, 0.85)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(249, 115, 22, 0.4)',
     zIndex: 10,
   },
   chicagoBadgeText: {
@@ -354,23 +591,30 @@ const styles = StyleSheet.create({
     right: 0,
     padding: 12,
     justifyContent: 'flex-end',
+    zIndex: 2,
   },
   seriesName: {
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '800',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   metaRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   metaText: {
     color: '#94a3b8',
     fontSize: 11,
-    fontWeight: '500',
+    fontWeight: '600',
+  },
+  currentEpHint: {
+    color: '#d8b4fe',
+    fontSize: 10,
+    fontWeight: '700',
+    marginBottom: 6,
   },
   statusDot: {
     width: 6,
@@ -383,7 +627,7 @@ const styles = StyleSheet.create({
   progressBar: {
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   progressLabel: {
     fontSize: 10,
@@ -403,6 +647,8 @@ const styles = StyleSheet.create({
   emptySubtitle: {
     color: '#64748b',
     fontSize: 13,
+    textAlign: 'center',
+    maxWidth: 360,
   },
   emptyBtn: {
     marginTop: 8,

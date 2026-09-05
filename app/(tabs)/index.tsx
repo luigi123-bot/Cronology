@@ -18,12 +18,17 @@ import { ActivityIndicator, ProgressBar } from 'react-native-paper';
 
 import { useStore } from '@/store/useStore';
 import { db } from '@/db';
-import { series, userProgress } from '@/db/schema';
+import { series, userProgress, episodes } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { getRecommendationsByGenre } from '@/services/tmdb';
 import type { SeriesWithProgress, TMDBSearchResult } from '@/types';
 import WebHeader from '@/components/WebHeader';
 import { DRIVE_MOVIES } from '@/services/googleDriveMovies';
+import {
+  getLocalWatchedEpisodeIds,
+  getAllSeriesCurrentEpisodes,
+  type SeriesCurrentProgress,
+} from '@/services/watchProgress';
 
 type CategoryFilter = 'all' | 'chicago' | 'movies' | 'series' | 'recs';
 
@@ -34,6 +39,7 @@ export default function HomeScreen() {
 
   const [recommendations, setRecommendations] = useState<TMDBSearchResult[]>([]);
   const [continueSeries, setContinueSeries] = useState<SeriesWithProgress | null>(null);
+  const [seriesCurrentMap, setSeriesCurrentMap] = useState<Record<number, SeriesCurrentProgress>>({});
   const [activeCategory, setActiveCategory] = useState<CategoryFilter>('all');
   const [loading, setLoading] = useState(seriesList.length === 0);
   const [refreshing, setRefreshing] = useState(false);
@@ -61,12 +67,31 @@ export default function HomeScreen() {
         )
         .catch(() => []);
 
-      const [dbSeries, watchedRows] = await Promise.all([dbSeriesPromise, progressPromise]);
-      const watchedSet = new Set((watchedRows || []).map((r) => r.episodeId));
+      const dbEpisodesPromise = db
+        .select({ id: episodes.id, seriesId: episodes.seriesId })
+        .from(episodes);
+
+      const [dbSeries, watchedRows, dbEpisodes] = await Promise.all([
+        dbSeriesPromise,
+        progressPromise,
+        dbEpisodesPromise,
+      ]);
+
+      const localWatched = getLocalWatchedEpisodeIds();
+      const watchedSet = new Set([
+        ...(watchedRows || []).map((r) => r.episodeId),
+        ...Array.from(localWatched),
+      ]);
+
+      const currentProgressMap = getAllSeriesCurrentEpisodes();
+      setSeriesCurrentMap(currentProgressMap);
 
       const seriesWithProgress: SeriesWithProgress[] = dbSeries.map((s) => {
-        const total = Number(s.numberOfEpisodes ?? 0);
-        const watched = 0;
+        const seriesEpisodes = dbEpisodes.filter((e) => e.seriesId === s.id);
+        const total = seriesEpisodes.length || Number(s.numberOfEpisodes ?? 0);
+        const watched = seriesEpisodes.filter((e) => watchedSet.has(e.id)).length;
+        const progressPercent = total > 0 ? Math.round((watched / total) * 100) : 0;
+
         return {
           id: s.id,
           tmdbId: s.tmdbId,
@@ -79,7 +104,7 @@ export default function HomeScreen() {
           numberOfEpisodes: total,
           watchedCount: watched,
           totalCount: total,
-          progressPercent: total > 0 ? Math.round((watched / total) * 100) : 0,
+          progressPercent,
           youtubeTrailerId: s.youtubeTrailerId,
           isChicagoUniverse: s.isChicagoUniverse ?? false,
           sortOrder: s.sortOrder ?? 999,
@@ -89,7 +114,7 @@ export default function HomeScreen() {
       setSeries(seriesWithProgress);
 
       const inProgress = seriesWithProgress
-        .filter((s) => s.progressPercent > 0 && s.progressPercent < 100)
+        .filter((s) => s.progressPercent > 0 || !!currentProgressMap[s.id])
         .sort((a, b) => b.progressPercent - a.progressPercent);
 
       setContinueSeries(inProgress[0] ?? seriesWithProgress[0] ?? null);
@@ -447,6 +472,14 @@ export default function HomeScreen() {
                       <View style={styles.cardBadge}>
                         <Text style={styles.cardBadgeText}>S1-S{s.numberOfSeasons}</Text>
                       </View>
+                      {seriesCurrentMap[s.id] && (
+                        <View style={styles.currentEpCardBadge}>
+                          <Ionicons name="location" size={10} color="#ffffff" />
+                          <Text style={styles.currentEpCardBadgeText}>
+                            T{seriesCurrentMap[s.id].seasonNumber}:E{seriesCurrentMap[s.id].episodeNumber}
+                          </Text>
+                        </View>
+                      )}
                       <View style={styles.playOverlay}>
                         <View style={styles.playCircle}>
                           <Ionicons name="play" size={18} color="#ffffff" />
@@ -460,7 +493,11 @@ export default function HomeScreen() {
                           {s.name}
                         </Text>
                         <Text style={styles.cardEpisodes}>
-                          {s.numberOfEpisodes} episodios
+                          {s.progressPercent === 100
+                            ? '✓ Visto completo'
+                            : s.progressPercent > 0
+                            ? `${s.progressPercent}% visto · ${s.watchedCount}/${s.totalCount} eps`
+                            : `${s.numberOfEpisodes} episodios`}
                         </Text>
                       </LinearGradient>
                     </View>
@@ -581,6 +618,14 @@ export default function HomeScreen() {
                       <View style={styles.cardBadge}>
                         <Text style={styles.cardBadgeText}>S1-S{s.numberOfSeasons}</Text>
                       </View>
+                      {seriesCurrentMap[s.id] && (
+                        <View style={styles.currentEpCardBadge}>
+                          <Ionicons name="location" size={10} color="#ffffff" />
+                          <Text style={styles.currentEpCardBadgeText}>
+                            T{seriesCurrentMap[s.id].seasonNumber}:E{seriesCurrentMap[s.id].episodeNumber}
+                          </Text>
+                        </View>
+                      )}
                       <View style={styles.playOverlay}>
                         <View style={styles.playCircle}>
                           <Ionicons name="play" size={18} color="#ffffff" />
@@ -594,7 +639,11 @@ export default function HomeScreen() {
                           {s.name}
                         </Text>
                         <Text style={styles.cardEpisodes}>
-                          {s.numberOfEpisodes} episodios
+                          {s.progressPercent === 100
+                            ? '✓ Visto completo'
+                            : s.progressPercent > 0
+                            ? `${s.progressPercent}% visto · ${s.watchedCount}/${s.totalCount} eps`
+                            : `${s.numberOfEpisodes} episodios`}
                         </Text>
                       </LinearGradient>
                     </View>
@@ -1109,6 +1158,26 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.3,
+  },
+  currentEpCardBadge: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#7c3aed',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#a855f7',
+    zIndex: 2,
+  },
+  currentEpCardBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '800',
   },
   playOverlay: {
     position: 'absolute',

@@ -25,6 +25,11 @@ import CrossoverAlert from '@/components/CrossoverAlert';
 import EpisodePlayer from '@/components/EpisodePlayer';
 import WebHeader from '@/components/WebHeader';
 import type { EpisodeWithProgress } from '@/types';
+import {
+  saveSeriesCurrentEpisode,
+  isEpisodeWatchedLocal,
+  markEpisodeWatchedLocal,
+} from '@/services/watchProgress';
 
 export default function EpisodeDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -54,13 +59,26 @@ export default function EpisodeDetailScreen() {
       const [s] = await db.select().from(series).where(eq(series.id, ep.seriesId));
       setSeriesData(s ?? null);
 
+      // Record this episode as the active point where the user is currently at in this series
+      saveSeriesCurrentEpisode(ep.seriesId, {
+        seriesId: ep.seriesId,
+        seriesName: s?.name ?? '',
+        seasonNumber: ep.seasonNumber,
+        episodeNumber: ep.episodeNumber,
+        episodeId: ep.id,
+        episodeName: ep.name,
+      });
+
       const [prog] = await db
         .select()
         .from(userProgress)
         .where(and(eq(userProgress.userId, userId), eq(userProgress.episodeId, episodeId)))
         .limit(1);
 
-      const isWatched = prog?.watched ?? watchedEpisodes.has(episodeId);
+      const isWatched =
+        prog?.watched ??
+        isEpisodeWatchedLocal(episodeId) ??
+        watchedEpisodes.has(episodeId);
       setWatched(isWatched);
 
       setEpisode({
@@ -181,6 +199,7 @@ export default function EpisodeDetailScreen() {
     const newWatched = !watched;
     setWatched(newWatched);
     markEpisodeWatched(episodeId, newWatched);
+    markEpisodeWatchedLocal(episodeId, newWatched);
 
     try {
       const existing = await db

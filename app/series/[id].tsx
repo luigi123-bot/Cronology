@@ -24,6 +24,12 @@ import CrossoverAlert from '@/components/CrossoverAlert';
 import EpisodeCard from '@/components/EpisodeCard';
 import WebHeader from '@/components/WebHeader';
 import { GRIMM_DRIVE_FOLDER_URL } from '@/services/googleDrive';
+import {
+  getSeriesCurrentEpisode,
+  isEpisodeWatchedLocal,
+  markEpisodeWatchedLocal,
+  type SeriesCurrentProgress,
+} from '@/services/watchProgress';
 
 const { width, height } = Dimensions.get('window');
 const BANNER_HEIGHT = height * 0.38;
@@ -36,6 +42,7 @@ export default function SeriesDetailScreen() {
   const [seriesData, setSeriesData] = useState<typeof series.$inferSelect | null>(null);
   const [seasonList, setSeasonList] = useState<SeasonDisplay[]>([]);
   const [selectedSeason, setSelectedSeason] = useState(1);
+  const [currentProgress, setCurrentProgress] = useState<SeriesCurrentProgress | null>(null);
   const [loading, setLoading] = useState(true);
   const [crossoverOnly, setCrossoverOnly] = useState(false);
 
@@ -47,6 +54,13 @@ export default function SeriesDetailScreen() {
       const [s] = await db.select().from(series).where(eq(series.id, seriesId));
       if (!s) return;
       setSeriesData(s);
+
+      // Check current episode progress point for this series
+      const savedProgress = getSeriesCurrentEpisode(seriesId);
+      if (savedProgress) {
+        setCurrentProgress(savedProgress);
+        setSelectedSeason(savedProgress.seasonNumber);
+      }
 
       // Load seasons
       const dbSeasons = await db
@@ -73,6 +87,11 @@ export default function SeriesDetailScreen() {
 
         const eps: EpisodeWithProgress[] = seasonEps.map((ep) => {
           const prog = progressMap.get(ep.id);
+          const isWatched =
+            prog?.watched ??
+            isEpisodeWatchedLocal(ep.id) ??
+            watchedEpisodes.has(ep.id);
+
           return {
             id: ep.id,
             seriesId: ep.seriesId,
@@ -91,7 +110,7 @@ export default function SeriesDetailScreen() {
             crossoverOrder: ep.crossoverOrder,
             crossoverSeries: (ep.crossoverSeries as { seriesName: string; seasonEp: string }[]) ?? [],
             deepseekFacts: ep.deepseekFacts,
-            watched: prog?.watched ?? watchedEpisodes.has(ep.id),
+            watched: isWatched,
             watchedAt: prog?.watchedAt ?? null,
             rating: prog?.rating ?? null,
           };
@@ -114,7 +133,7 @@ export default function SeriesDetailScreen() {
     } finally {
       setLoading(false);
     }
-  }, [seriesId, userId]);
+  }, [seriesId, userId, watchedEpisodes]);
 
   useEffect(() => {
     loadSeries();
@@ -123,6 +142,7 @@ export default function SeriesDetailScreen() {
   const handleToggleWatched = async (episode: EpisodeWithProgress) => {
     const newWatched = !episode.watched;
     markEpisodeWatched(episode.id, newWatched);
+    markEpisodeWatchedLocal(episode.id, newWatched);
 
     try {
       const existing = await db
@@ -319,6 +339,31 @@ export default function SeriesDetailScreen() {
           </Text>
         )}
 
+        {/* Continue Watching Banner if user has started this series */}
+        {currentProgress && (
+          <View style={styles.continueCard}>
+            <View style={styles.continueCardLeft}>
+              <View style={styles.continuePill}>
+                <Ionicons name="play" size={11} color="#c084fc" />
+                <Text style={styles.continuePillText}>CONTINUAR VIENDO</Text>
+              </View>
+              <Text style={styles.continueEpCode}>
+                Temporada {currentProgress.seasonNumber} · Episodio {currentProgress.episodeNumber}
+              </Text>
+              <Text style={styles.continueEpTitle} numberOfLines={1}>
+                {currentProgress.episodeName}
+              </Text>
+            </View>
+            <Pressable
+              style={styles.continueBtn}
+              onPress={() => router.push(`/episode/${currentProgress.episodeId}`)}
+            >
+              <Ionicons name="play" size={15} color="#ffffff" />
+              <Text style={styles.continueBtnText}>Reproducir</Text>
+            </Pressable>
+          </View>
+        )}
+
         {/* Season Selector */}
         <ScrollView
           horizontal
@@ -357,6 +402,7 @@ export default function SeriesDetailScreen() {
               {ep.isCrossover && <CrossoverAlert episode={ep} />}
               <EpisodeCard
                 episode={ep}
+                isCurrent={currentProgress?.episodeId === ep.id}
                 onToggleWatched={() => handleToggleWatched(ep)}
                 onPress={() => router.push(`/episode/${ep.id}`)}
               />
@@ -467,7 +513,65 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     fontSize: 14,
     lineHeight: 21,
+    marginBottom: 16,
+  },
+  continueCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(124, 58, 237, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(168, 85, 247, 0.35)',
+    borderRadius: 20,
+    padding: 16,
     marginBottom: 20,
+    gap: 12,
+  },
+  continueCardLeft: {
+    flex: 1,
+    gap: 3,
+  },
+  continuePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 2,
+  },
+  continuePillText: {
+    color: '#c084fc',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  continueEpCode: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  continueEpTitle: {
+    color: '#cbd5e1',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  continueBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#7c3aed',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    cursor: 'pointer' as any,
+    shadowColor: '#7c3aed',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  continueBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '800',
   },
   seasonScroll: { marginHorizontal: -20, marginBottom: 16 },
   seasonTab: {
