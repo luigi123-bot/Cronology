@@ -16,6 +16,11 @@ export const GRIMM_DRIVE_EPISODES: Record<string, { fileId: string; title: strin
     title: 'Grimm.1x01.HD1080p-lat.mkv',
     quality: '1080p HD Latino',
   },
+  'grimm-s1e2': {
+    fileId: '1g17xPECwlTphlS8kcR5qpkA3EeMovBQd',
+    title: 'Grimm.1x02.HD1080p-lat.mkv',
+    quality: '1080p HD Latino',
+  },
 };
 
 /**
