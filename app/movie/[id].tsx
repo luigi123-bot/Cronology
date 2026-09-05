@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import {
   View,
   Text,
@@ -23,7 +23,19 @@ export default function MovieScreen() {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768;
 
+  const scrollRef = useRef<ScrollView>(null);
+  const playerPosition = useRef<number>(0);
+  const trailerPosition = useRef<number>(0);
+
   const movie = getMovieById(id || '') || DRIVE_MOVIES[0];
+
+  const scrollToPlayer = () => {
+    scrollRef.current?.scrollTo({ y: playerPosition.current - 20, animated: true });
+  };
+
+  const scrollToTrailer = () => {
+    scrollRef.current?.scrollTo({ y: trailerPosition.current - 20, animated: true });
+  };
 
   if (!movie) {
     return (
@@ -40,7 +52,11 @@ export default function MovieScreen() {
     <View style={styles.outerContainer}>
       <WebHeader />
 
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        ref={scrollRef}
+        style={styles.container}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={[styles.mainWrapper, isDesktop && styles.desktopWrapper]}>
           {/* Top Bar Navigation */}
           <View style={styles.breadcrumbBar}>
@@ -59,73 +75,162 @@ export default function MovieScreen() {
             </Pressable>
 
             <View style={styles.movieBadgeHeader}>
-              <Ionicons name="film" size={14} color="#a855f7" />
-              <Text style={styles.movieBadgeHeaderText}>PELÍCULA</Text>
+              <Ionicons name="film" size={14} color="#ec4899" />
+              <Text style={styles.movieBadgeHeaderText}>CINE DRIVE</Text>
             </View>
           </View>
 
-          {/* Video Player */}
-          <MoviePlayer
-            movieTitle={movie.title}
-            driveFileId={movie.driveFileId}
-            quality={movie.quality}
-          />
+          {/* ═══════════════════════════════════════════════════════════
+              CARTELERA PRINCIPAL (Billboard + Sinopsis ANTES del video)
+             ═══════════════════════════════════════════════════════════ */}
+          <View style={styles.carteleraCard}>
+            {/* Backdrop Banner Background */}
+            {movie.backdropUrl && (
+              <Image
+                source={{ uri: movie.backdropUrl }}
+                style={styles.carteleraBackdrop}
+                contentFit="cover"
+                transition={400}
+              />
+            )}
+            <LinearGradient
+              colors={[
+                'rgba(18, 18, 30, 0.7)',
+                'rgba(18, 18, 30, 0.95)',
+                '#12121e',
+              ]}
+              style={styles.carteleraGradient}
+            >
+              <View style={[styles.carteleraContent, isDesktop && styles.carteleraDesktop]}>
+                {/* Poster Column */}
+                {movie.posterUrl && (
+                  <View style={styles.posterWrapper}>
+                    <Image
+                      source={{ uri: movie.posterUrl }}
+                      style={styles.posterImage}
+                      contentFit="cover"
+                      transition={300}
+                    />
+                    <View style={styles.posterBadge}>
+                      <Text style={styles.posterBadgeText}>{movie.quality}</Text>
+                    </View>
+                  </View>
+                )}
 
-          {/* Movie Details Card */}
-          <View style={styles.infoCard}>
-            <View style={styles.titleRow}>
-              <View style={{ flex: 1 }}>
-                <View style={styles.badgeRow}>
-                  <View style={styles.yearBadge}>
-                    <Text style={styles.yearBadgeText}>{movie.year}</Text>
+                {/* Details Column */}
+                <View style={styles.detailsCol}>
+                  {/* Badges */}
+                  <View style={styles.badgeRow}>
+                    <View style={styles.yearBadge}>
+                      <Text style={styles.yearBadgeText}>{movie.year}</Text>
+                    </View>
+                    <View style={styles.qualityPill}>
+                      <Ionicons name="sparkles" size={12} color="#86efac" />
+                      <Text style={styles.qualityPillText}>{movie.quality}</Text>
+                    </View>
+                    {movie.runtime > 0 && (
+                      <View style={styles.runtimePill}>
+                        <Ionicons name="time-outline" size={12} color="#94a3b8" />
+                        <Text style={styles.runtimeText}>{movie.runtime} min</Text>
+                      </View>
+                    )}
+                    {movie.voteAverage && (
+                      <View style={styles.ratingBadge}>
+                        <Ionicons name="star" size={13} color="#fbbf24" />
+                        <Text style={styles.ratingText}>{movie.voteAverage}</Text>
+                      </View>
+                    )}
                   </View>
-                  <View style={styles.qualityBadge}>
-                    <Text style={styles.qualityBadgeText}>{movie.quality}</Text>
-                  </View>
-                  {movie.runtime > 0 && (
-                    <Text style={styles.runtimeText}>· {movie.runtime} min</Text>
+
+                  {/* Title */}
+                  <Text style={styles.movieTitle}>{movie.title}</Text>
+                  {movie.originalTitle && movie.originalTitle !== movie.title && (
+                    <Text style={styles.originalTitle}>
+                      Título original: {movie.originalTitle}
+                    </Text>
                   )}
-                  {movie.voteAverage && (
-                    <View style={styles.ratingBadge}>
-                      <Ionicons name="star" size={12} color="#fbbf24" />
-                      <Text style={styles.ratingText}>{movie.voteAverage}</Text>
+
+                  {/* Genres */}
+                  {movie.genres && movie.genres.length > 0 && (
+                    <View style={styles.genresRow}>
+                      {movie.genres.map((g) => (
+                        <View key={g.id} style={styles.genrePill}>
+                          <Text style={styles.genreText}>{g.name}</Text>
+                        </View>
+                      ))}
                     </View>
                   )}
-                </View>
 
-                <Text style={styles.movieTitle}>{movie.title}</Text>
-                {movie.originalTitle && movie.originalTitle !== movie.title && (
-                  <Text style={styles.originalTitle}>Título original: {movie.originalTitle}</Text>
-                )}
+                  {/* Call-to-action buttons */}
+                  <View style={styles.ctaRow}>
+                    <Pressable style={styles.playCtaBtn} onPress={scrollToPlayer}>
+                      <Ionicons name="play" size={18} color="#ffffff" />
+                      <Text style={styles.playCtaText}>Reproducir Película</Text>
+                    </Pressable>
+
+                    {movie.youtubeTrailerId && (
+                      <Pressable style={styles.trailerCtaBtn} onPress={scrollToTrailer}>
+                        <Ionicons name="logo-youtube" size={16} color="#ef4444" />
+                        <Text style={styles.trailerCtaText}>Ver Tráiler</Text>
+                      </Pressable>
+                    )}
+                  </View>
+
+                  {/* Synopsis / Sinopsis Oficial */}
+                  <View style={styles.synopsisSection}>
+                    <View style={styles.synopsisHeader}>
+                      <Ionicons name="document-text-outline" size={16} color="#a855f7" />
+                      <Text style={styles.synopsisLabel}>Sinopsis Oficial</Text>
+                    </View>
+                    <Text style={styles.synopsisText}>{movie.overview}</Text>
+                  </View>
+                </View>
+              </View>
+            </LinearGradient>
+          </View>
+
+          {/* ═══════════════════════════════════════════════════════════
+              SECCIÓN DE REPRODUCCIÓN (El video abajo de la cartelera)
+             ═══════════════════════════════════════════════════════════ */}
+          <View
+            onLayout={(e) => {
+              playerPosition.current = e.nativeEvent.layout.y;
+            }}
+            style={styles.playerSection}
+          >
+            <View style={styles.sectionTitleRow}>
+              <Ionicons name="play-circle" size={22} color="#4ade80" />
+              <View>
+                <Text style={styles.sectionHeading}>Reproductor Full HD</Text>
+                <Text style={styles.sectionSubheading}>
+                  Streaming directo desde Google Drive sin anuncios
+                </Text>
               </View>
             </View>
 
-            {/* Genres */}
-            {movie.genres && movie.genres.length > 0 && (
-              <View style={styles.genresRow}>
-                {movie.genres.map((g) => (
-                  <View key={g.id} style={styles.genrePill}>
-                    <Text style={styles.genreText}>{g.name}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {/* Synopsis */}
-            {movie.overview && (
-              <View style={styles.overviewSection}>
-                <Text style={styles.overviewLabel}>Sinopsis Oficial</Text>
-                <Text style={styles.overviewText}>{movie.overview}</Text>
-              </View>
-            )}
+            <MoviePlayer
+              movieTitle={movie.title}
+              driveFileId={movie.driveFileId}
+              quality={movie.quality}
+            />
           </View>
 
-          {/* Official YouTube Trailer */}
+          {/* ═══════════════════════════════════════════════════════════
+              TRÁILER OFICIAL DE YOUTUBE
+             ═══════════════════════════════════════════════════════════ */}
           {movie.youtubeTrailerId && (
-            <View style={styles.trailerCard}>
+            <View
+              onLayout={(e) => {
+                trailerPosition.current = e.nativeEvent.layout.y;
+              }}
+              style={styles.trailerCard}
+            >
               <View style={styles.trailerHeader}>
-                <Ionicons name="logo-youtube" size={18} color="#ef4444" />
-                <Text style={styles.trailerTitle}>Tráiler Oficial</Text>
+                <Ionicons name="logo-youtube" size={20} color="#ef4444" />
+                <View>
+                  <Text style={styles.trailerTitle}>Tráiler Oficial</Text>
+                  <Text style={styles.trailerSubtitle}>Avance cinematográfico en alta definición</Text>
+                </View>
               </View>
               <View style={styles.trailerFrame}>
                 {Platform.OS === 'web' ? (
@@ -149,7 +254,7 @@ export default function MovieScreen() {
             </View>
           )}
 
-          <View style={{ height: 60 }} />
+          <View style={{ height: 80 }} />
         </View>
       </ScrollView>
     </View>
@@ -198,7 +303,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   backBtn: {
     flexDirection: 'row',
@@ -219,91 +324,166 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(168, 85, 247, 0.15)',
+    backgroundColor: 'rgba(236, 72, 153, 0.15)',
     paddingVertical: 5,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(168, 85, 247, 0.3)',
+    borderColor: 'rgba(236, 72, 153, 0.35)',
   },
   movieBadgeHeaderText: {
-    color: '#c084fc',
+    color: '#f472b6',
     fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
-  infoCard: {
+
+  /* ─── Cartelera Billboard Styles ─── */
+  carteleraCard: {
+    position: 'relative',
     backgroundColor: '#12121e',
-    borderRadius: 20,
-    padding: 22,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
-    marginBottom: 16,
+    overflow: 'hidden',
+    marginBottom: 24,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.5,
+    shadowRadius: 28,
+    elevation: 10,
   },
-  titleRow: {
+  carteleraBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    opacity: 0.28,
+  },
+  carteleraGradient: {
+    width: '100%',
+    padding: 24,
+  },
+  carteleraContent: {
+    flexDirection: 'column',
+    gap: 24,
+  },
+  carteleraDesktop: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
+    gap: 32,
+  },
+  posterWrapper: {
+    width: 220,
+    alignSelf: 'center',
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.14)',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.6,
+    shadowRadius: 20,
+    position: 'relative',
+  },
+  posterImage: {
+    width: 220,
+    height: 330,
+  },
+  posterBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  posterBadgeText: {
+    color: '#4ade80',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  detailsCol: {
+    flex: 1,
   },
   badgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 10,
+    marginBottom: 12,
     flexWrap: 'wrap',
   },
   yearBadge: {
-    backgroundColor: 'rgba(168, 85, 247, 0.2)',
-    paddingHorizontal: 8,
+    backgroundColor: 'rgba(168, 85, 247, 0.22)',
+    paddingHorizontal: 9,
     paddingVertical: 3,
-    borderRadius: 6,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(168, 85, 247, 0.4)',
+    borderColor: 'rgba(168, 85, 247, 0.45)',
   },
   yearBadgeText: {
     color: '#c084fc',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '800',
   },
-  qualityBadge: {
-    backgroundColor: 'rgba(74, 222, 128, 0.12)',
-    paddingHorizontal: 8,
+  qualityPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(74, 222, 128, 0.14)',
+    paddingHorizontal: 9,
     paddingVertical: 3,
-    borderRadius: 6,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(74, 222, 128, 0.3)',
+    borderColor: 'rgba(74, 222, 128, 0.35)',
   },
-  qualityBadgeText: {
+  qualityPillText: {
     color: '#86efac',
     fontSize: 11,
     fontWeight: '700',
   },
+  runtimePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
   runtimeText: {
-    color: '#64748b',
-    fontSize: 12,
+    color: '#94a3b8',
+    fontSize: 11,
+    fontWeight: '600',
   },
   ratingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(251, 191, 36, 0.12)',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
+    backgroundColor: 'rgba(251, 191, 36, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
   ratingText: {
     color: '#fbbf24',
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   movieTitle: {
-    fontSize: 26,
+    fontSize: 32,
     fontWeight: '900',
     color: '#ffffff',
-    letterSpacing: -0.5,
+    letterSpacing: -0.6,
   },
   originalTitle: {
-    color: '#64748b',
+    color: '#94a3b8',
     fontSize: 13,
     marginTop: 4,
   },
@@ -314,58 +494,135 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   genrePill: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   genreText: {
-    color: '#94a3b8',
-    fontSize: 11,
+    color: '#e2e8f0',
+    fontSize: 12,
     fontWeight: '600',
   },
-  overviewSection: {
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+  ctaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 20,
+    flexWrap: 'wrap',
   },
-  overviewLabel: {
-    color: '#e2e8f0',
+  playCtaBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#16a34a',
+    paddingVertical: 12,
+    paddingHorizontal: 22,
+    borderRadius: 14,
+    cursor: 'pointer' as any,
+    shadowColor: '#16a34a',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  playCtaText: {
+    color: '#ffffff',
     fontSize: 14,
-    fontWeight: '700',
-    marginBottom: 8,
+    fontWeight: '800',
   },
-  overviewText: {
+  trailerCtaBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    cursor: 'pointer' as any,
+  },
+  trailerCtaText: {
+    color: '#f8fafc',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  synopsisSection: {
+    marginTop: 22,
+    paddingTop: 18,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  synopsisHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  synopsisLabel: {
+    color: '#f1f5f9',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  synopsisText: {
     color: '#cbd5e1',
     fontSize: 14,
-    lineHeight: 22,
+    lineHeight: 24,
   },
+
+  /* ─── Video Player Section ─── */
+  playerSection: {
+    marginBottom: 28,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 14,
+  },
+  sectionHeading: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  sectionSubheading: {
+    color: '#64748b',
+    fontSize: 12,
+    marginTop: 2,
+  },
+
+  /* ─── Trailer Card ─── */
   trailerCard: {
     backgroundColor: '#12121e',
-    borderRadius: 20,
-    padding: 20,
+    borderRadius: 24,
+    padding: 22,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
-    marginBottom: 16,
+    marginBottom: 24,
   },
   trailerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 14,
+    gap: 10,
+    marginBottom: 16,
   },
   trailerTitle: {
     color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  trailerSubtitle: {
+    color: '#64748b',
+    fontSize: 12,
+    marginTop: 2,
   },
   trailerFrame: {
     width: '100%',
     aspectRatio: 16 / 9,
-    borderRadius: 14,
+    borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: '#000000',
   },
