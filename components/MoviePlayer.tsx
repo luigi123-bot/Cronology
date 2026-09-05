@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, Platform, Linking } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { getWatchSession, saveWatchSession, clearWatchSession } from '@/services/watchProgress';
 
 interface MoviePlayerProps {
   movieTitle: string;
@@ -14,12 +15,27 @@ export default function MoviePlayer({
   driveFileId,
   quality,
 }: MoviePlayerProps) {
+  const mediaKey = `movie-${driveFileId}`;
+
   const [theaterMode, setTheaterMode] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showResumePrompt, setShowResumePrompt] = useState(false);
   const [driveState, setDriveState] = useState<'loading' | 'ready' | 'processing' | 'error'>('loading');
   const driveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const isFocused = useIsFocused();
+
+  // Check for prior watch session to offer resume or start fresh
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const session = getWatchSession(mediaKey);
+      if (session) {
+        setShowResumePrompt(true);
+      } else {
+        setShowResumePrompt(false);
+      }
+    }
+  }, [mediaKey]);
 
   // Stop playback when component unmounts
   useEffect(() => {
@@ -75,7 +91,20 @@ export default function MoviePlayer({
   const handleDriveLoad = useCallback(() => {
     if (driveTimerRef.current) clearTimeout(driveTimerRef.current);
     setDriveState('ready');
-  }, []);
+    saveWatchSession(mediaKey, 'watching');
+  }, [mediaKey]);
+
+  const handleContinue = useCallback(() => {
+    setShowResumePrompt(false);
+    saveWatchSession(mediaKey, 'watching');
+  }, [mediaKey]);
+
+  const handleRestart = useCallback(() => {
+    clearWatchSession(mediaKey);
+    saveWatchSession(mediaKey, 'watching');
+    setShowResumePrompt(false);
+    setRefreshKey(k => k + 1);
+  }, [mediaKey]);
 
   const handleDriveRetry = useCallback(() => {
     setDriveState('loading');
@@ -110,6 +139,16 @@ export default function MoviePlayer({
         </View>
 
         <View style={styles.headerRight}>
+          {/* Empezar de nuevo quick button */}
+          <Pressable
+            style={styles.restartActionBtn}
+            onPress={handleRestart}
+            accessibilityLabel="Empezar de nuevo la película"
+          >
+            <Ionicons name="reload" size={13} color="#c084fc" />
+            <Text style={styles.restartActionText}>Empezar de nuevo</Text>
+          </Pressable>
+
           <Pressable
             style={styles.actionBtn}
             onPress={handleReload}
@@ -149,6 +188,29 @@ export default function MoviePlayer({
             <View style={styles.centeredBox}>
               <Ionicons name="pause-circle-outline" size={42} color="#475569" />
               <Text style={styles.pausedText}>Reproducción detenida</Text>
+            </View>
+          ) : showResumePrompt ? (
+            <View style={styles.resumeOverlay}>
+              <View style={styles.resumeCard}>
+                <View style={styles.resumeIconWrap}>
+                  <Ionicons name="film" size={28} color="#a855f7" />
+                </View>
+                <Text style={styles.resumeTitle}>¿Continuar o empezar de nuevo?</Text>
+                <Text style={styles.resumeSubtitle}>
+                  Ya estuviste viendo esta película ({movieTitle}).
+                  Elige cómo prefieres reproducirla para que no se repita sola.
+                </Text>
+                <View style={styles.resumeBtnRow}>
+                  <Pressable style={styles.resumePrimaryBtn} onPress={handleContinue}>
+                    <Ionicons name="play-circle" size={18} color="#ffffff" />
+                    <Text style={styles.resumePrimaryText}>Continuar video</Text>
+                  </Pressable>
+                  <Pressable style={styles.resumeSecondaryBtn} onPress={handleRestart}>
+                    <Ionicons name="reload" size={15} color="#cbd5e1" />
+                    <Text style={styles.resumeSecondaryText}>Empezar de nuevo</Text>
+                  </Pressable>
+                </View>
+              </View>
             </View>
           ) : driveState === 'processing' ? (
             <View style={styles.driveProcessingOverlay}>
@@ -275,6 +337,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  restartActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(168, 85, 247, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(168, 85, 247, 0.3)',
+    paddingHorizontal: 10,
+    height: 32,
+    borderRadius: 8,
+    cursor: 'pointer' as any,
+  },
+  restartActionText: {
+    color: '#d8b4fe',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   actionBtn: {
     width: 32,
     height: 32,
@@ -283,6 +362,104 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     cursor: 'pointer' as any,
+  },
+  resumeOverlay: {
+    position: 'absolute' as any,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(10, 10, 16, 0.94)',
+    padding: 24,
+    zIndex: 20,
+    ...(Platform.OS === 'web'
+      ? {
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+        }
+      : {}),
+  } as any,
+  resumeCard: {
+    alignItems: 'center',
+    maxWidth: 420,
+    width: '100%',
+    padding: 24,
+    backgroundColor: '#141422',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(168, 85, 247, 0.25)',
+    boxShadow: '0 12px 36px rgba(0,0,0,0.6)',
+  } as any,
+  resumeIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(168, 85, 247, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(168, 85, 247, 0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  resumeTitle: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '800',
+    textAlign: 'center',
+    letterSpacing: -0.3,
+  },
+  resumeSubtitle: {
+    color: '#94a3b8',
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 18,
+  },
+  resumeBtnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 20,
+    width: '100%',
+    justifyContent: 'center',
+  },
+  resumePrimaryBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#7c3aed',
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    cursor: 'pointer' as any,
+  },
+  resumePrimaryText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  resumeSecondaryBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    cursor: 'pointer' as any,
+  },
+  resumeSecondaryText: {
+    color: '#cbd5e1',
+    fontSize: 13,
+    fontWeight: '700',
   },
   playerFrame: {
     width: '100%',
