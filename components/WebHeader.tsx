@@ -4,6 +4,7 @@ import { useRouter, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '@/store/useStore';
 import LoginModal from '@/components/LoginModal';
+import { getStoredUser } from '@/services/auth';
 
 export default function WebHeader() {
   const router = useRouter();
@@ -11,15 +12,13 @@ export default function WebHeader() {
   const { user, setUser } = useStore();
   const [showLoginModal, setShowLoginModal] = useState(false);
 
-  // Restore user from localStorage if exists
+  // Restore user from storage if valid
   useEffect(() => {
-    if (typeof window !== 'undefined' && !user) {
-      try {
-        const raw = localStorage.getItem('cronology_auth_user');
-        if (raw) {
-          setUser(JSON.parse(raw));
-        }
-      } catch {}
+    if (!user) {
+      const stored = getStoredUser();
+      if (stored) {
+        setUser(stored);
+      }
     }
   }, [user, setUser]);
 

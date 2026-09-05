@@ -6,6 +6,7 @@ import { useFonts, Inter_400Regular, Inter_600SemiBold, Inter_700Bold, Inter_900
 import * as SplashScreen from 'expo-splash-screen';
 import { MD3DarkTheme, PaperProvider } from 'react-native-paper';
 import { Platform } from 'react-native';
+import AuthGate from '@/components/AuthGate';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -43,18 +44,20 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <PaperProvider theme={customDarkTheme}>
         <StatusBar style="light" backgroundColor="#0a0a0f" />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: '#0a0a0f' },
-            animation: 'slide_from_right',
-          }}
-        >
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="series/[id]" options={{ headerShown: false }} />
-          <Stack.Screen name="episode/[id]" options={{ headerShown: false }} />
-          <Stack.Screen name="movie/[id]" options={{ headerShown: false }} />
-        </Stack>
+        <AuthGate>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: '#0a0a0f' },
+              animation: 'slide_from_right',
+            }}
+          >
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="series/[id]" options={{ headerShown: false }} />
+            <Stack.Screen name="episode/[id]" options={{ headerShown: false }} />
+            <Stack.Screen name="movie/[id]" options={{ headerShown: false }} />
+          </Stack>
+        </AuthGate>
       </PaperProvider>
     </SafeAreaProvider>
   );

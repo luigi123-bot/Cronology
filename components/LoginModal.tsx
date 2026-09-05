@@ -10,6 +10,12 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '@/store/useStore';
+import {
+  validateCredentials,
+  setStoredUser,
+  removeStoredUser,
+  AUTHORIZED_CREDENTIALS,
+} from '@/services/auth';
 import type { AuthUser } from '@/types';
 
 interface LoginModalProps {
@@ -47,39 +53,35 @@ export default function LoginModal({ visible, onClose }: LoginModalProps) {
     const trimmedName = displayName.trim();
     const trimmedUser = username.trim().replace(/^@/, '');
 
-    if (!trimmedName) {
-      setError('Por favor ingresa tu nombre');
-      return;
-    }
-    if (!trimmedUser) {
-      setError('Por favor ingresa un nombre de usuario');
+    const isValid = validateCredentials(trimmedName, trimmedUser);
+    if (!isValid) {
+      setError(
+        'El nombre debe ser "Luis gotopo" (en cualquier mayúscula/minúscula) y el usuario "1266845".'
+      );
       return;
     }
 
+    const formattedName =
+      trimmedName.toLowerCase() === AUTHORIZED_CREDENTIALS.normalizedName
+        ? AUTHORIZED_CREDENTIALS.defaultDisplayName
+        : trimmedName;
+
     const newUser: AuthUser = {
-      id: user?.id || 1,
-      email: `${trimmedUser.toLowerCase()}@cronology.local`,
-      displayName: trimmedName,
-      username: trimmedUser,
+      id: user?.id || 1266845,
+      email: 'luisgotopo@cronology.local',
+      displayName: formattedName,
+      username: AUTHORIZED_CREDENTIALS.normalizedUser,
       avatarUrl: selectedAvatar,
     };
 
+    setStoredUser(newUser);
     setUser(newUser);
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('cronology_auth_user', JSON.stringify(newUser));
-      } catch {}
-    }
     onClose();
   };
 
   const handleLogout = () => {
+    removeStoredUser();
     setUser(null);
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.removeItem('cronology_auth_user');
-      } catch {}
-    }
     onClose();
   };
 
