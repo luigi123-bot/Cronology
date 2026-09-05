@@ -87,7 +87,18 @@ export default function EpisodeDetailScreen() {
       });
 
       if (ep.deepseekFacts) {
-        setFacts(ep.deepseekFacts);
+        // Detect if cached facts are in English and re-generate in Spanish
+        const isEnglish = detectEnglish(ep.deepseekFacts);
+        if (isEnglish) {
+          // Clear stale English cache from DB
+          await db
+            .update(episodes)
+            .set({ deepseekFacts: null, updatedAt: new Date() })
+            .where(eq(episodes.id, episodeId));
+          // Leave facts empty so user can regenerate in Spanish
+        } else {
+          setFacts(ep.deepseekFacts);
+        }
       }
 
       // Load prev and next episode in the series
@@ -125,9 +136,24 @@ export default function EpisodeDetailScreen() {
     loadEpisode();
   }, [loadEpisode]);
 
-  const loadFacts = async () => {
-    if (!episode || loadingFacts || facts) return;
+  // Heuristic: detect if a text is primarily in English
+  const detectEnglish = (text: string): boolean => {
+    const englishMarkers = [
+      /\bthe\b/i, /\bwas\b/i, /\bwere\b/i, /\btheir\b/i,
+      /\bwho\b/i, /\bwhat\b/i, /\bwhen\b/i, /\bwhere\b/i,
+      /\bthis\b/i, /\bthat\b/i, /\bwith\b/i, /\bfrom\b/i,
+      /\bhave\b/i, /\bhas\b/i, /\bhad\b/i, /\bwould\b/i,
+      /\bcould\b/i, /\bshould\b/i,
+    ];
+    const matches = englishMarkers.filter(re => re.test(text)).length;
+    return matches >= 4;
+  };
+
+  const loadFacts = async (forceRegenerate = false) => {
+    if (!episode || loadingFacts) return;
+    if (facts && !forceRegenerate) return;
     setLoadingFacts(true);
+    if (forceRegenerate) setFacts('');
     try {
       const result = await getEpisodeFacts(
         episode.seriesName,
@@ -342,20 +368,28 @@ export default function EpisodeDetailScreen() {
             {facts ? (
               <View style={styles.factsContent}>
                 <Text style={styles.factsText}>{facts}</Text>
+                {/* Regenerate button in case it's still in English */}
+                <Pressable
+                  style={styles.regenerateBtn}
+                  onPress={() => loadFacts(true)}
+                >
+                  <Ionicons name="refresh" size={12} color="#38bdf8" />
+                  <Text style={styles.regenerateBtnText}>Regenerar en español</Text>
+                </Pressable>
               </View>
             ) : loadingFacts ? (
               <View style={styles.aiLoading}>
                 <ActivityIndicator size="small" color="#38bdf8" />
                 <Text style={styles.aiLoadingText}>
-                  Analizando conexiones del episodio con IA...
+                  Generando curiosidades en español con IA...
                 </Text>
               </View>
             ) : (
               <View style={styles.aiPromptRow}>
                 <Text style={styles.aiPromptText}>
-                  Descubre curiosidades de producción, impacto en el canon y secretos del rodaje.
+                  Descubre curiosidades de producción, impacto en el canon y secretos del rodaje — todo en español.
                 </Text>
-                <Pressable style={styles.aiActionBtn} onPress={loadFacts}>
+                <Pressable style={styles.aiActionBtn} onPress={() => loadFacts()}>
                   <Ionicons name="sparkles" size={14} color="#ffffff" />
                   <Text style={styles.aiActionBtnText}>Generar con IA</Text>
                 </Pressable>
@@ -640,5 +674,19 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 13,
     fontWeight: '700',
+  },
+  regenerateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 10,
+    alignSelf: 'flex-end',
+    cursor: 'pointer' as any,
+    opacity: 0.7,
+  },
+  regenerateBtnText: {
+    color: '#38bdf8',
+    fontSize: 11,
+    fontWeight: '600',
   },
 });
