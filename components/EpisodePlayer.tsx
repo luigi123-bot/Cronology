@@ -122,9 +122,10 @@ export default function EpisodePlayer({
   const getServerUrl = (server: StreamServer): string => {
     switch (server) {
       case 'gdrive':
-        // Use Drive's /preview URL — the only reliable way to play MKV in browser
-        // (native <video> does NOT support MKV codec; uc?export=download redirects to HTML for large files)
-        return driveInfo ? driveInfo.embedUrl : '';
+        // /preview with rm=minimal + hd=1 forces Google to serve the highest quality stream available
+        return driveInfo
+          ? `https://drive.google.com/file/d/${driveInfo.fileId}/preview?rm=minimal&hd=1`
+          : '';
       case 'vidlink':
         return `https://vidlink.pro/tv/${seriesTmdbId}/${seasonNumber}/${episodeNumber}?primaryColor=a855f7&secondaryColor=161622&iconColor=ffffff&title=true&poster=true`;
       case 'videasy':
@@ -352,17 +353,31 @@ export default function EpisodePlayer({
 
         <View style={styles.instructionBadge}>
           <Ionicons
-            name={currentServer === 'gdrive' ? 'checkmark-circle' : 'settings'}
+            name={currentServer === 'gdrive' ? 'settings' : 'settings'}
             size={12}
-            color={currentServer === 'gdrive' ? '#22c55e' : '#38bdf8'}
+            color={currentServer === 'gdrive' ? '#f59e0b' : '#38bdf8'}
           />
           <Text style={styles.instructionText}>
             {currentServer === 'gdrive'
-              ? 'Reproduciendo con doblaje en Español Latino'
+              ? '⚙ En el reproductor → haz clic en Calidad → selecciona 1080p'
               : 'En el reproductor: Ajustes ⚙️ > Audio o Subtítulos'}
           </Text>
         </View>
       </View>
+
+      {/* Quality Tip Banner — only for Drive server */}
+      {currentServer === 'gdrive' && driveInfo && driveState === 'ready' && (
+        <View style={styles.qualityTipBanner}>
+          <Ionicons name="information-circle" size={14} color="#f59e0b" />
+          <Text style={styles.qualityTipText}>
+            <Text style={{ fontWeight: '800', color: '#fbbf24' }}>Para ver en 1080p Full HD:</Text>
+            {'  '}Dentro del reproductor, haz clic en{' '}
+            <Text style={{ fontWeight: '800', color: '#fff' }}>⚙ (Configuración)</Text>
+            {' '}→{' '}
+            <Text style={{ fontWeight: '800', color: '#4ade80' }}>Calidad → 1080p</Text>
+          </Text>
+        </View>
+      )}
 
       {/* Video Player Frame */}
       <View style={[styles.playerFrame, theaterMode && styles.playerFrameTheater]}>
@@ -709,12 +724,12 @@ const styles = StyleSheet.create({
   playerFrame: {
     width: '100%',
     aspectRatio: 16 / 9,
-    maxHeight: 580,
+    maxHeight: 650,
     backgroundColor: '#000000',
     position: 'relative',
   },
   playerFrameTheater: {
-    maxHeight: 720,
+    maxHeight: 1080,
   },
   mobileFallback: {
     flex: 1,
@@ -830,6 +845,23 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     maxWidth: 320,
     lineHeight: 16,
+  },
+  qualityTipBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(245, 158, 11, 0.25)',
+    flexWrap: 'wrap',
+  },
+  qualityTipText: {
+    color: '#cbd5e1',
+    fontSize: 12,
+    flex: 1,
+    lineHeight: 18,
   },
 });
 
