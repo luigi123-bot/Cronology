@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, Platform, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getDriveFileForEpisode } from '@/services/googleDrive';
@@ -83,28 +83,48 @@ export default function EpisodePlayer({
   const [audioMode, setAudioMode] = useState<AudioMode>('latino');
   const [theaterMode, setTheaterMode] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  // Drive error state: true = Drive is still processing, switch to fallback
-  const [driveError, setDriveError] = useState(false);
-  const driveVideoRef = useRef<HTMLVideoElement>(null);
+  // Drive state: 'loading' | 'ready' | 'processing' | 'error'
+  const [driveState, setDriveState] = useState<'loading' | 'ready' | 'processing' | 'error'>('loading');
+  const driveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Auto-fallback: if Drive video can't load after 8s, switch to VidLink
+  // Reset drive state on server/episode change — one-shot timer, no loops
   useEffect(() => {
     if (currentServer !== 'gdrive' || !driveInfo || Platform.OS !== 'web') return;
-    setDriveError(false);
-    const timer = setTimeout(() => {
-      const video = driveVideoRef.current;
-      if (video && video.readyState === 0 && video.networkState === 3) {
-        setDriveError(true);
-      }
-    }, 10000);
-    return () => clearTimeout(timer);
-  }, [currentServer, driveInfo, refreshKey]);
+    setDriveState('loading');
+    // Clear any previous timer
+    if (driveTimerRef.current) clearTimeout(driveTimerRef.current);
+    // After 25s with no iframe onLoad signal, assume Drive is still processing
+    driveTimerRef.current = setTimeout(() => {
+      setDriveState(prev => prev === 'loading' ? 'processing' : prev);
+    }, 25000);
+    return () => {
+      if (driveTimerRef.current) clearTimeout(driveTimerRef.current);
+    };
+  // Only reset when the actual episode/server changes, NOT on refreshKey
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentServer, driveInfo?.fileId]);
+
+  const handleDriveLoad = useCallback(() => {
+    if (driveTimerRef.current) clearTimeout(driveTimerRef.current);
+    setDriveState('ready');
+  }, []);
+
+  const handleDriveRetry = useCallback(() => {
+    setDriveState('loading');
+    setRefreshKey(k => k + 1);
+    // Re-arm the timeout
+    if (driveTimerRef.current) clearTimeout(driveTimerRef.current);
+    driveTimerRef.current = setTimeout(() => {
+      setDriveState(prev => prev === 'loading' ? 'processing' : prev);
+    }, 25000);
+  }, []);
 
   const getServerUrl = (server: StreamServer): string => {
     switch (server) {
       case 'gdrive':
-        // Use direct stream URL (bypasses Drive processing requirement)
-        return driveInfo ? driveInfo.streamUrl : '';
+        // Use Drive's /preview URL — the only reliable way to play MKV in browser
+        // (native <video> does NOT support MKV codec; uc?export=download redirects to HTML for large files)
+        return driveInfo ? driveInfo.embedUrl : '';
       case 'vidlink':
         return `https://vidlink.pro/tv/${seriesTmdbId}/${seasonNumber}/${episodeNumber}?primaryColor=a855f7&secondaryColor=161622&iconColor=ffffff&title=true&poster=true`;
       case 'videasy':
@@ -348,55 +368,67 @@ export default function EpisodePlayer({
       <View style={[styles.playerFrame, theaterMode && styles.playerFrameTheater]}>
         {Platform.OS === 'web' ? (
           currentServer === 'gdrive' && driveInfo ? (
-            driveError ? (
-              // Drive processing error fallback
+            driveState === 'processing' ? (
+              // Drive still processing — no loop, just a clear message
               <View style={styles.driveProcessingOverlay}>
                 <Ionicons name="cloud-download-outline" size={48} color="#f59e0b" />
-                <Text style={styles.driveProcessingTitle}>⏳ Archivo en procesamiento</Text>
+                <Text style={styles.driveProcessingTitle}>⏳ Drive aún está procesando el video</Text>
                 <Text style={styles.driveProcessingText}>
-                  Google Drive aún está procesando este video en Full HD. Esto puede tardar{' '}
-                  <Text style={{ color: '#fbbf24', fontWeight: '700' }}>30 minutos a algunas horas</Text>{' '}
-                  según el tamaño del archivo.
+                  Google Drive necesita convertir el archivo a formato de streaming.{' '}
+                  Esto puede tardar{' '}
+                  <Text style={{ color: '#fbbf24', fontWeight: '700' }}>entre 30 minutos y varias horas</Text>{' '}
+                  para archivos de 1080p. Mientras tanto puedes:
                 </Text>
                 <Pressable
                   style={styles.driveRetryBtn}
-                  onPress={() => { setRefreshKey(k => k + 1); setDriveError(false); }}
+                  onPress={handleDriveRetry}
                 >
                   <Ionicons name="refresh" size={15} color="#fff" />
-                  <Text style={styles.driveRetryText}>Reintentar</Text>
+                  <Text style={styles.driveRetryText}>Verificar si ya terminó</Text>
                 </Pressable>
                 <Pressable
                   style={[styles.driveRetryBtn, { backgroundColor: '#7c3aed', marginTop: 8 }]}
                   onPress={() => setCurrentServer('vidlink')}
                 >
                   <Ionicons name="flash" size={15} color="#fff" />
-                  <Text style={styles.driveRetryText}>Usar VidLink Ultra en su lugar</Text>
+                  <Text style={styles.driveRetryText}>Ver en Inglés con VidLink (disponible ya)</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.driveRetryBtn, { backgroundColor: '#0f766e', marginTop: 8 }]}
+                  onPress={() => Linking.openURL(`https://drive.google.com/file/d/${driveInfo.fileId}/view`)}
+                >
+                  <Ionicons name="open-outline" size={15} color="#fff" />
+                  <Text style={styles.driveRetryText}>Abrir directo en Google Drive</Text>
                 </Pressable>
               </View>
             ) : (
-              // Native HTML5 video player - no transcoding needed
-              <video
-                key={refreshKey}
-                ref={driveVideoRef}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  backgroundColor: '#000',
-                }}
-                controls
-                autoPlay={false}
-                preload="metadata"
-                onError={() => setDriveError(true)}
-                onStalled={() => {
-                  // If stalled immediately with no data, it's likely still processing
-                  const v = driveVideoRef.current;
-                  if (v && v.readyState === 0) setDriveError(true);
-                }}
-              >
-                <source src={currentUrl} type="video/x-matroska" />
-                <source src={currentUrl} type="video/mp4" />
-                Tu navegador no soporta reproducción de video HTML5.
-              </video>
+              // Drive iframe — /preview is the ONLY reliable way to play MKV from Drive
+              <>
+                {driveState === 'loading' && (
+                  <View style={styles.driveLoadingOverlay}>
+                    <View style={styles.driveLoadingSpinner}>
+                      <Ionicons name="logo-google" size={28} color="#4ade80" />
+                    </View>
+                    <Text style={styles.driveLoadingText}>Cargando reproductor de Drive...</Text>
+                    <Text style={styles.driveLoadingHint}>Si tarda más de 30s, el archivo aún está siendo procesado por Google</Text>
+                  </View>
+                )}
+                <iframe
+                  key={refreshKey}
+                  src={currentUrl}
+                  title={`${seriesName} S${seasonNumber}E${episodeNumber} - ${episodeName}`}
+                  onLoad={handleDriveLoad}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    border: 'none',
+                    backgroundColor: '#000000',
+                    display: driveState === 'loading' ? 'none' : 'block',
+                  }}
+                  allowFullScreen
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                />
+              </>
             )
           ) : (
             <iframe
@@ -764,4 +796,40 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 14,
   },
+  driveLoadingOverlay: {
+    position: 'absolute' as any,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000000',
+    gap: 12,
+    zIndex: 10,
+  },
+  driveLoadingSpinner: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(74, 222, 128, 0.12)',
+    borderWidth: 2,
+    borderColor: 'rgba(74, 222, 128, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  driveLoadingText: {
+    color: '#e2e8f0',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  driveLoadingHint: {
+    color: '#64748b',
+    fontSize: 11,
+    textAlign: 'center',
+    maxWidth: 320,
+    lineHeight: 16,
+  },
 });
+
