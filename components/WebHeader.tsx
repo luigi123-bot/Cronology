@@ -4,6 +4,7 @@ import { useRouter, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '@/store/useStore';
 import LoginModal from '@/components/LoginModal';
+import DriveSyncAdminModal from '@/components/DriveSyncAdminModal';
 import { getStoredUser } from '@/services/auth';
 
 export default function WebHeader() {
@@ -11,8 +12,10 @@ export default function WebHeader() {
   const pathname = usePathname();
   const { user, setUser } = useStore();
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showDriveAdminModal, setShowDriveAdminModal] = useState(false);
   const { width } = useWindowDimensions();
 
+  const isOwner = user?.displayName?.toLowerCase().includes('luis') || user?.username === '1266845';
   const isMobile = width < 768;
   const isSmallMobile = width < 480;
 
@@ -161,6 +164,28 @@ export default function WebHeader() {
               </button>
             )}
 
+            {/* Botón exclusivo para Luis Gotopo: Sincronizador de Drive */}
+            {isOwner && !isMobile && (
+              <button
+                style={styles.ownerDriveBtn as any}
+                onClick={() => setShowDriveAdminModal(true)}
+                title="Panel exclusivo Luis Gotopo: Sincronizar y organizar carpetas de Drive"
+              >
+                <Ionicons name="cloud-upload" size={14} color="#facc15" />
+                <span>Drive Admin</span>
+              </button>
+            )}
+
+            {isOwner && isMobile && (
+              <button
+                style={styles.ownerDriveBtnMobile as any}
+                onClick={() => setShowDriveAdminModal(true)}
+                title="Sincronizar Drive"
+              >
+                <Ionicons name="cloud-upload" size={16} color="#facc15" />
+              </button>
+            )}
+
             {/* User Profile / Login Button */}
             {user ? (
               <button
@@ -201,6 +226,14 @@ export default function WebHeader() {
         visible={showLoginModal}
         onClose={() => setShowLoginModal(false)}
       />
+
+      {/* Modal de sincronización de series exclusivo para Luis Gotopo */}
+      {isOwner && (
+        <DriveSyncAdminModal
+          visible={showDriveAdminModal}
+          onClose={() => setShowDriveAdminModal(false)}
+        />
+      )}
     </>
   );
 }
@@ -329,5 +362,30 @@ const styles = {
     fontWeight: 700,
     cursor: 'pointer',
     boxShadow: '0 4px 12px rgba(124, 58, 237, 0.35)',
+  },
+  ownerDriveBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '6px 12px',
+    borderRadius: 10,
+    background: 'rgba(250, 204, 21, 0.12)',
+    border: '1px solid rgba(250, 204, 21, 0.35)',
+    color: '#facc15',
+    fontSize: 12,
+    fontWeight: 800,
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+  },
+  ownerDriveBtnMobile: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    background: 'rgba(250, 204, 21, 0.12)',
+    border: '1px solid rgba(250, 204, 21, 0.35)',
+    cursor: 'pointer',
   },
 };
