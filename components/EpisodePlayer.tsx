@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, Platform, Linking } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Platform, Linking, useWindowDimensions } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { getDriveFileForEpisode } from '@/services/googleDrive';
@@ -21,6 +21,8 @@ export default function EpisodePlayer({
   episodeNumber,
   episodeName,
 }: EpisodePlayerProps) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 600;
   const driveInfo = getDriveFileForEpisode(seriesName, seasonNumber, episodeNumber);
   const mediaKey = `episode-${seriesTmdbId}-${seasonNumber}-${episodeNumber}`;
 
@@ -147,7 +149,7 @@ export default function EpisodePlayer({
             <Text style={styles.driveBadgeText}>Google Drive</Text>
           </View>
           <Text style={styles.qualityText}>
-            {driveInfo?.quality || 'Full HD 1080p'}
+            {isMobile ? '1080p' : (driveInfo?.quality || 'Full HD 1080p')}
           </Text>
         </View>
 
@@ -159,7 +161,9 @@ export default function EpisodePlayer({
             accessibilityLabel="Empezar de nuevo el video"
           >
             <Ionicons name="reload" size={13} color="#c084fc" />
-            <Text style={styles.restartActionText}>Empezar de nuevo</Text>
+            <Text style={styles.restartActionText}>
+              {isMobile ? 'Reiniciar' : 'Empezar de nuevo'}
+            </Text>
           </Pressable>
 
           <Pressable
@@ -319,11 +323,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     backgroundColor: '#12121e',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+    flexWrap: 'wrap',
+    gap: 8,
+    width: '100%',
   },
   headerLeft: {
     flexDirection: 'row',

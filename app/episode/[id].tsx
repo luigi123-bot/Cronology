@@ -48,6 +48,7 @@ export default function EpisodeDetailScreen() {
   const [loading, setLoading] = useState(true);
 
   const isDesktop = width >= 768;
+  const isMobile = width < 600;
   const userId = user?.id ?? 1;
   const episodeId = Number(id);
 
@@ -184,14 +185,9 @@ export default function EpisodeDetailScreen() {
         episode.overview ?? ''
       );
       setFacts(result);
-
-      // Cache in DB
-      await db
-        .update(episodes)
-        .set({ deepseekFacts: result, updatedAt: new Date() })
-        .where(eq(episodes.id, episodeId));
-    } catch {
-      setFacts('No se pudieron obtener curiosidades en este momento.');
+    } catch (error) {
+      console.error('[Episode] Failed to load facts:', error);
+      setFacts('No se pudieron cargar los datos curiosos en este momento.');
     } finally {
       setLoadingFacts(false);
     }
@@ -199,39 +195,31 @@ export default function EpisodeDetailScreen() {
 
   const handleToggleWatched = async () => {
     if (!episode) return;
-    const newWatched = !watched;
-    setWatched(newWatched);
-    markEpisodeWatched(episodeId, newWatched);
-    markEpisodeWatchedLocal(episodeId, newWatched);
+    const nextVal = !watched;
+    setWatched(nextVal);
+    markEpisodeWatched(episode.id, nextVal);
+    markEpisodeWatchedLocal(episode.id, nextVal);
 
     try {
-      const existing = await db
-        .select()
-        .from(userProgress)
-        .where(and(eq(userProgress.userId, userId), eq(userProgress.episodeId, episodeId)))
-        .limit(1);
-
-      if (existing.length > 0) {
-        await db
-          .update(userProgress)
-          .set({
-            watched: newWatched,
-            watchedAt: newWatched ? new Date() : null,
-            updatedAt: new Date(),
-          })
-          .where(eq(userProgress.id, existing[0].id));
-      } else {
-        await db.insert(userProgress).values({
+      await db
+        .insert(userProgress)
+        .values({
           userId,
-          episodeId,
-          watched: newWatched,
-          watchedAt: newWatched ? new Date() : null,
+          episodeId: episode.id,
+          watched: nextVal,
+          watchedAt: nextVal ? new Date() : null,
+          updatedAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: [userProgress.userId, userProgress.episodeId],
+          set: {
+            watched: nextVal,
+            watchedAt: nextVal ? new Date() : null,
+            updatedAt: new Date(),
+          },
         });
-      }
     } catch (error) {
-      console.error('[Episode] Toggle watched failed:', error);
-      setWatched(!newWatched);
-      markEpisodeWatched(episodeId, !newWatched);
+      console.error('[Episode] Failed to save progress:', error);
     }
   };
 
@@ -239,7 +227,7 @@ export default function EpisodeDetailScreen() {
     return (
       <View style={styles.loader}>
         <ActivityIndicator size="large" color="#a855f7" />
-        <Text style={styles.loaderText}>Cargando episodio y reproductor...</Text>
+        <Text style={styles.loaderText}>Cargando capítulo...</Text>
       </View>
     );
   }
@@ -247,9 +235,9 @@ export default function EpisodeDetailScreen() {
   if (!episode) {
     return (
       <View style={styles.loader}>
-        <Text style={styles.errorText}>Episodio no encontrado</Text>
-        <Pressable style={styles.backButtonSimple} onPress={() => router.back()}>
-          <Text style={{ color: '#fff', fontWeight: '700' }}>Volver</Text>
+        <Text style={styles.errorText}>Capítulo no encontrado</Text>
+        <Pressable style={styles.backButtonSimple} onPress={() => router.replace('/')}>
+          <Text style={{ color: '#fff', fontWeight: '700' }}>Volver al Inicio</Text>
         </Pressable>
       </View>
     );
@@ -265,8 +253,8 @@ export default function EpisodeDetailScreen() {
         <View style={[styles.mainWrapper, isDesktop && styles.desktopWrapper]}>
           
           {/* Breadcrumb / Top Navigation Bar */}
-          <View style={styles.breadcrumbBar}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View style={[styles.breadcrumbBar, isMobile && styles.breadcrumbBarMobile]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <Pressable
                 style={styles.backBtn}
                 onPress={() => {
@@ -279,18 +267,21 @@ export default function EpisodeDetailScreen() {
                   }
                 }}
               >
-                <Ionicons name="arrow-back" size={18} color="#ffffff" />
-                <Text style={styles.backBtnText}>Volver a {episode.seriesName}</Text>
+                <Ionicons name="arrow-back" size={16} color="#ffffff" />
+                <Text style={styles.backBtnText}>
+                  {isMobile ? 'Volver' : `Volver a ${episode.seriesName}`}
+                </Text>
               </Pressable>
 
               <Pressable
                 style={[styles.backBtn, { backgroundColor: 'rgba(255,255,255,0.06)' }]}
                 onPress={() => router.replace('/')}
               >
-                <Ionicons name="home" size={15} color="#c084fc" />
+                <Ionicons name="home" size={14} color="#c084fc" />
                 <Text style={[styles.backBtnText, { color: '#f1f5f9' }]}>Inicio</Text>
               </Pressable>
             </View>
+
 
             <View style={styles.navControls}>
               {prevEpisode && (
@@ -476,6 +467,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     flexWrap: 'wrap',
     gap: 12,
+    width: '100%',
+  },
+  breadcrumbBarMobile: {
+    gap: 8,
   },
   backBtn: {
     flexDirection: 'row',

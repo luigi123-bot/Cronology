@@ -11,7 +11,7 @@ export default function Root({ children }: PropsWithChildren) {
       <head>
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
         <title>Cronology — TV Universe & Episode Tracker</title>
         <meta name="description" content="Rastreador avanzado de series y del Chicago Universe con IA y crossovers en orden cronológico" />
         <meta name="theme-color" content="#7c5af3" />
@@ -30,6 +30,18 @@ export default function Root({ children }: PropsWithChildren) {
           __html: `
             :root {
               color-scheme: dark;
+              background-color: #0a0a0f !important;
+            }
+            *, *::before, *::after {
+              box-sizing: border-box !important;
+            }
+            html {
+              background-color: #0a0a0f !important;
+              color-scheme: dark !important;
+              width: 100% !important;
+              max-width: 100% !important;
+              overflow-x: hidden !important;
+              -webkit-text-size-adjust: 100% !important;
             }
             body {
               background-color: #0a0a0f !important;
@@ -37,10 +49,21 @@ export default function Root({ children }: PropsWithChildren) {
               background-attachment: fixed !important;
               color: #f1f5f9;
               font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
-              overflow-x: hidden;
-              margin: 0;
-              padding: 0;
-              min-height: 100vh;
+              overflow-x: hidden !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              min-height: 100vh !important;
+              width: 100% !important;
+              max-width: 100% !important;
+            }
+            #root {
+              background-color: #0a0a0f !important;
+              min-height: 100vh !important;
+              width: 100% !important;
+              max-width: 100% !important;
+              overflow-x: hidden !important;
+              display: flex !important;
+              flex-direction: column !important;
             }
             /* Sleek Dark Scrollbar */
             ::-webkit-scrollbar {
