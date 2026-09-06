@@ -247,13 +247,14 @@ export default function MoviePlayer({
       ref={containerRef}
       style={[
         styles.container,
+        isMobile && styles.containerMobile,
         theaterMode && styles.theaterContainer,
         isFullscreen && styles.containerFullscreen,
       ]}
     >
       {/* Sleek Minimal Header (hidden in fullscreen) */}
       {!isFullscreen && (
-        <View style={styles.headerBar}>
+        <View style={[styles.headerBar, isMobile && styles.headerBarMobile]}>
           <View style={styles.headerLeft}>
             <View style={styles.driveBadge}>
               <View style={styles.driveDot} />
@@ -266,7 +267,7 @@ export default function MoviePlayer({
           <View style={styles.headerRight}>
             {/* Empezar de nuevo quick button */}
             <Pressable
-              style={styles.restartActionBtn}
+              style={[styles.restartActionBtn, isMobile && styles.restartActionBtnMobile]}
               onPress={handleRestart}
               accessibilityLabel="Empezar de nuevo la película"
             >
@@ -324,6 +325,7 @@ export default function MoviePlayer({
         ref={playerFrameRef}
         style={[
           styles.playerFrame,
+          isMobile && styles.playerFrameMobile,
           theaterMode && styles.playerFrameTheater,
           isFullscreen && styles.playerFrameFullscreen,
         ]}
@@ -404,12 +406,14 @@ export default function MoviePlayer({
                 src={currentUrl}
                 title={movieTitle}
                 onLoad={handleDriveLoad}
+                scrolling="no"
                 style={{
                   width: '100%',
                   height: '100%',
                   border: 'none',
                   backgroundColor: '#000000',
                   display: driveState === 'loading' ? 'none' : 'block',
+                  overflow: 'hidden',
                 }}
                 allowFullScreen
                 allow="autoplay; fullscreen; encrypted-media; picture-in-picture; web-share"
@@ -470,6 +474,10 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 8,
   },
+  containerMobile: {
+    borderRadius: 14,
+    marginVertical: 8,
+  },
   containerFullscreen: {
     position: 'fixed' as any,
     top: 0,
@@ -499,6 +507,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#12121e',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+    flexWrap: 'wrap',
+    gap: 8,
+    width: '100%',
+  },
+  headerBarMobile: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    gap: 6,
   },
   headerLeft: {
     flexDirection: 'row',
@@ -548,6 +564,10 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 8,
     cursor: 'pointer' as any,
+  },
+  restartActionBtnMobile: {
+    paddingHorizontal: 8,
+    height: 28,
   },
   restartActionText: {
     color: '#d8b4fe',
@@ -667,6 +687,11 @@ const styles = StyleSheet.create({
     maxHeight: 650,
     backgroundColor: '#000000',
     position: 'relative',
+    overflow: 'hidden',
+  },
+  playerFrameMobile: {
+    minHeight: 250,
+    aspectRatio: 16 / 10,
   },
   playerFrameTheater: {
     maxHeight: 1080,

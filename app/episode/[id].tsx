@@ -250,7 +250,7 @@ export default function EpisodeDetailScreen() {
       <WebHeader />
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-        <View style={[styles.mainWrapper, isDesktop && styles.desktopWrapper]}>
+        <View style={[styles.mainWrapper, isMobile && styles.mainWrapperMobile, isDesktop && styles.desktopWrapper]}>
           
           {/* Breadcrumb / Top Navigation Bar */}
           <View style={[styles.breadcrumbBar, isMobile && styles.breadcrumbBarMobile]}>
@@ -454,6 +454,10 @@ const styles = StyleSheet.create({
     width: '100%',
     paddingHorizontal: 16,
     paddingTop: 16,
+  },
+  mainWrapperMobile: {
+    paddingHorizontal: 8,
+    paddingTop: 8,
   },
   desktopWrapper: {
     maxWidth: 1140,
