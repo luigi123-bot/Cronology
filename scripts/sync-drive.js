@@ -2,139 +2,436 @@ require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 
-const FOLDER_ID = '1lVqDRczGqe-3cYuTcD_NC2Nu0n955TjS';
-const FOLDER_URL = `https://drive.google.com/drive/folders/${FOLDER_ID}`;
-
 // ══════════════════════════════════════════════════════════════════════════════
-// 📺 Cronology - Sincronizador Multi-Serie Inteligente de Google Drive
-// Detecta automáticamente qué serie corresponde a cada archivo en la carpeta
-// y organiza cada episodio en su serie correcta (Grimm, Gravity Falls, etc.)
+// 📺 Cronology - Sincronizador Recursivo de Series y Temporadas de Google Drive
+// • Escanea recursivamente carpetas y subcarpetas (ej: Grimm/Temporada 1/...)
+// • Separa automáticamente las series por carpetas y por nombres de archivo
+// • Agrupa y organiza cada serie POR TEMPORADAS y POR CAPÍTULOS
+// • Muestra informe detallado de videos procesados y archivos no-video omitidos
+// • Sincroniza metadatos y carátulas oficiales con TMDB y Base de Datos Neon
 // ══════════════════════════════════════════════════════════════════════════════
 
-async function syncDrive() {
-  console.log(`\n═══════════════════════════════════════════════════════════`);
-  console.log(`📡 Conectando a Google Drive para escanear carpeta:`);
-  console.log(`   📁 ID:  ${FOLDER_ID}`);
-  console.log(`   🔗 URL: ${FOLDER_URL}`);
-  console.log(`═══════════════════════════════════════════════════════════\n`);
+// Argumentos CLI: -f o --folder (carpeta de Drive a escanear)
+const args = process.argv.slice(2);
+let customFolderArg = '';
+for (let i = 0; i < args.length; i++) {
+  if ((args[i] === '-f' || args[i] === '--folder') && args[i + 1]) {
+    customFolderArg = args[++i];
+  }
+}
 
-  const res = await fetch(FOLDER_URL, {
+function extractFolderId(input) {
+  if (!input) return null;
+  const match = input.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  if (match) return match[1];
+  if (/^[a-zA-Z0-9_-]{25,45}$/.test(input.trim())) return input.trim();
+  return null;
+}
+
+const ROOT_FOLDER_ID = (customFolderArg && extractFolderId(customFolderArg)) || '1lVqDRczGqe-3cYuTcD_NC2Nu0n955TjS';
+const ROOT_FOLDER_URL = `https://drive.google.com/drive/folders/${ROOT_FOLDER_ID}`;
+
+async function fetchDriveFolderHtml(folderId) {
+  const url = `https://drive.google.com/drive/folders/${folderId}`;
+  const res = await fetch(url, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     },
   });
 
   if (!res.ok) {
-    throw new Error(`Error al acceder a Google Drive: HTTP ${res.status}`);
+    throw new Error(`Error al acceder a Google Drive (${folderId}): HTTP ${res.status}`);
   }
 
-  const html = await res.text();
-  const rawFiles = [];
-  const seenIds = new Set();
+  return res.text();
+}
+
+/**
+ * Escanea recursivamente una carpeta de Google Drive y todas sus subcarpetas
+ */
+async function crawlDriveFolder(folderId, currentPath = [], visited = new Set(), results = { videos: [], nonVideos: [], subfoldersScanned: 0 }) {
+  if (visited.has(folderId)) return results;
+  visited.add(folderId);
+
+  const pathLabel = currentPath.length > 0 ? currentPath.join(' / ') : 'Raíz';
+  process.stdout.write(`   📁 Escaneando carpeta: [${pathLabel}] (${folderId.slice(0, 10)}...)... `);
+
+  let html = '';
+  try {
+    html = await fetchDriveFolderHtml(folderId);
+  } catch (err) {
+    console.log(`❌ Error: ${err.message}`);
+    return results;
+  }
+
+  results.subfoldersScanned++;
+
+  const rawItems = [];
+  const foundSubfolders = [];
+  const seenInThisFolder = new Set();
 
   // Pattern 1: Escaped hex JSON format
   const hexPattern = /\\x5b\\x22([a-zA-Z0-9_-]{25,45})\\x22,\\x5b\\x22[a-zA-Z0-9_-]+\\x22\\x5d,\\x22([^\\"]+?)\\x22/gi;
   let match;
   while ((match = hexPattern.exec(html)) !== null) {
-    const fileId = match[1];
+    const id = match[1];
     const name = match[2];
-    if (fileId.length >= 28 && !fileId.startsWith('AAAAA') && !seenIds.has(fileId)) {
-      seenIds.add(fileId);
-      rawFiles.push({ fileId, name });
+    if (id.length >= 28 && !id.startsWith('AAAAA') && !seenInThisFolder.has(id)) {
+      seenInThisFolder.add(id);
+      const chunk = html.slice(Math.max(0, match.index - 50), Math.min(html.length, match.index + 400));
+      const isFolder = chunk.includes('application/vnd.google-apps.folder') || chunk.includes('google-apps.folder');
+      if (isFolder) {
+        foundSubfolders.push({ id, name });
+      } else {
+        rawItems.push({ id, name, folderPath: currentPath });
+      }
     }
   }
 
-  // Pattern 2: Standard JSON array if rendered unescaped
+  // Pattern 2: Standard unescaped format
   const standardPattern = /\["([a-zA-Z0-9_-]{25,45})",\["[a-zA-Z0-9_-]+"\],"([^"]+?)"/gi;
   while ((match = standardPattern.exec(html)) !== null) {
-    const fileId = match[1];
+    const id = match[1];
     const name = match[2];
-    if (fileId.length >= 28 && !fileId.startsWith('AAAAA') && !seenIds.has(fileId)) {
-      seenIds.add(fileId);
-      rawFiles.push({ fileId, name });
+    if (id.length >= 28 && !id.startsWith('AAAAA') && !seenInThisFolder.has(id)) {
+      seenInThisFolder.add(id);
+      const chunk = html.slice(Math.max(0, match.index - 50), Math.min(html.length, match.index + 400));
+      const isFolder = chunk.includes('application/vnd.google-apps.folder');
+      if (isFolder) {
+        foundSubfolders.push({ id, name });
+      } else {
+        rawItems.push({ id, name, folderPath: currentPath });
+      }
     }
   }
 
-  console.log(`📂 Total archivos encontrados en Drive: ${rawFiles.length}\n`);
+  // Clasificar archivos en video vs no-video
+  let newVideos = 0;
+  for (const item of rawItems) {
+    const isVideo = /\.(?:mkv|mp4|avi|webm|ts|mov|m4v)$/i.test(item.name) ||
+      /(?:dual|1080p|720p|bluray|h264|x264|hevc|x265)/i.test(item.name);
 
-  // Map to group episodes by series
-  // key -> { seriesKey, seriesName, episodes: {} }
-  const seriesGroups = {
-    'grimm': {
-      seriesKey: 'grimm',
-      seriesName: 'Grimm',
-      folderUrl: FOLDER_URL,
-      folderId: FOLDER_ID,
-      episodes: {},
-    },
-    'gravity-falls': {
-      seriesKey: 'gravity-falls',
-      seriesName: 'Gravity Falls',
-      folderUrl: FOLDER_URL,
-      folderId: FOLDER_ID,
-      episodes: {},
-    },
+    if (isVideo) {
+      results.videos.push(item);
+      newVideos++;
+    } else {
+      results.nonVideos.push(item);
+    }
+  }
+
+  console.log(`✅ ${newVideos} videos | ${foundSubfolders.length} subcarpetas`);
+
+  // Explorar recursivamente cada subcarpeta encontrada
+  for (const subfolder of foundSubfolders) {
+    await crawlDriveFolder(
+      subfolder.id,
+      [...currentPath, subfolder.name],
+      visited,
+      results
+    );
+  }
+
+  return results;
+}
+
+/**
+ * Analiza un archivo de video y extrae serie, temporada, número de episodio y calidad
+ */
+/**
+ * Analiza un archivo de video y extrae serie, temporada, número de episodio y calidad.
+ * Soporta cualquier estructura de carpetas:
+ *   - [Raíz] / Serie / Temporada X / Archivo
+ *   - [Raíz] / Serie Temp X / Archivo
+ *   - [Raíz] / Serie / Archivo
+ *   - [Raíz] / Archivo (con Serie S01E01)
+ */
+function parseVideoItem(item) {
+  const { name, id, folderPath } = item;
+  const fullName = name.trim();
+
+  // Filtrar carpetas genéricas del folderPath
+  const cleanFolderPath = folderPath.filter(
+    (f) => !/^(?:series|mis\s*series|drive|videos|pel[ií]culas|raiz|ra[ií]z|compartido)$/i.test(f.trim())
+  );
+
+  // 1. Detectar Temporada (Season)
+  let season = null;
+
+  // 1.1 Intentar desde el nombre del archivo (ej. S01E01, 1x01, Temp 1)
+  const epInFile =
+    fullName.match(/[sS](\d{1,2})[eE](\d{1,3})/) ||
+    fullName.match(/(\d{1,2})[xX](\d{1,3})/) ||
+    fullName.match(/[._\s-](\d{1,2})[._\s-]?[eE](\d{1,3})/i) ||
+    fullName.match(/(?:temp(?:orada)?|season)[._\s-]*(\d{1,2})[._\s-]*(?:ep|episode|cap|capitulo)?[._\s-]*(\d{1,3})/i);
+
+  if (epInFile) {
+    season = parseInt(epInFile[1], 10);
+  } else {
+    // 1.2 Si no está en el nombre del archivo, buscar en la ruta de carpetas de derecha a izquierda
+    for (let i = cleanFolderPath.length - 1; i >= 0; i--) {
+      const folder = cleanFolderPath[i];
+      const match = folder.match(/(?:temp(?:orada)?|season|t)[._\s-]*(\d{1,2})\b/i);
+      if (match) {
+        season = parseInt(match[1], 10);
+        break;
+      }
+      // O si la carpeta es solo un número (ej. "1", "02") y la anterior es el nombre de la serie
+      if (/^\d{1,2}$/.test(folder.trim()) && i > 0) {
+        season = parseInt(folder.trim(), 10);
+        break;
+      }
+    }
+  }
+
+  // 2. Detectar Episodio (Episode)
+  let episode = null;
+
+  if (epInFile) {
+    episode = parseInt(epInFile[2], 10);
+  } else {
+    // Buscar patrones de episodio en el nombre del archivo
+    const capNamedMatch =
+      fullName.match(/(?:cap[ií]tulo|cap|episodio|ep|episode)[._\s-]*(\d{1,3})\b/i) ||
+      fullName.match(/[eE](\d{1,3})\b/);
+
+    if (capNamedMatch) {
+      episode = parseInt(capNamedMatch[1], 10);
+    } else {
+      // Buscar número inicial (ej. "01 - Titulo.mp4", "05.mkv")
+      const leadingNumMatch = fullName.match(/^(\d{1,3})(?:[._\s-]+|\.[a-z0-9]+$)/i);
+      if (leadingNumMatch) {
+        const num = parseInt(leadingNumMatch[1], 10);
+        if (num > 0 && num < 1000) {
+          episode = num;
+        }
+      } else {
+        // Buscar cualquier número 1-99 aislado que no sea año ni resolución
+        const allNums = fullName.match(/\b\d{1,3}\b/g);
+        if (allNums) {
+          for (const nStr of allNums) {
+            const n = parseInt(nStr, 10);
+            if (n >= 1 && n <= 99 && n !== season && ![480, 576, 720].includes(n)) {
+              episode = n;
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Si no se pudo detectar temporada o episodio, no podemos indexarlo con precisión
+  if (season === null || episode === null) {
+    return null;
+  }
+
+  // 3. Determinar la Serie
+  let seriesKey = '';
+  let seriesName = '';
+
+  const lowerName = fullName.toLowerCase();
+  const lowerPath = cleanFolderPath.join(' ').toLowerCase();
+
+  // 3.1 Series conocidas directamente
+  if (lowerName.includes('grimm') || lowerPath.includes('grimm')) {
+    seriesKey = 'grimm';
+    seriesName = 'Grimm';
+  } else if (
+    lowerName.includes('gravity') ||
+    lowerName.includes('falls') ||
+    lowerPath.includes('gravity') ||
+    lowerPath.includes('falls')
+  ) {
+    seriesKey = 'gravity-falls';
+    seriesName = 'Gravity Falls';
+  } else if (lowerName.includes('chicago med') || lowerPath.includes('chicago med')) {
+    seriesKey = 'chicago-med';
+    seriesName = 'Chicago Med';
+  } else if (lowerName.includes('chicago fire') || lowerPath.includes('chicago fire')) {
+    seriesKey = 'chicago-fire';
+    seriesName = 'Chicago Fire';
+  } else if (lowerName.includes('chicago p') || lowerPath.includes('chicago p')) {
+    seriesKey = 'chicago-pd';
+    seriesName = 'Chicago P.D.';
+  } else {
+    // 3.2 Deducir de las carpetas
+    for (const folder of cleanFolderPath) {
+      // Si la carpeta tiene "Grimm Temp1" o "The Boys Temporada 2", limpiar la parte de temporada
+      const stripped = folder
+        .replace(/(?:temp(?:orada)?|season|t)[._\s-]*\d{1,2}/gi, '')
+        .replace(/[._\-\[\]\(\)]+/g, ' ')
+        .trim();
+
+      if (stripped.length >= 2 && !/^\d+$/.test(stripped)) {
+        seriesName = stripped
+          .split(/\s+/)
+          .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+          .join(' ');
+        seriesKey = seriesName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        break;
+      }
+    }
+
+    // 3.3 Si las carpetas solo decían "Temporada 1", deducir del nombre del archivo
+    if (!seriesKey) {
+      const prefix = fullName.split(/[sS]\d{1,2}[eE]\d{1,2}|\d{1,2}[xX]\d{1,2}|(?:temp|season|cap)/i)[0];
+      const cleaned = prefix.replace(/[._\-]+/g, ' ').trim();
+      if (cleaned.length >= 2) {
+        seriesName = cleaned
+          .split(/\s+/)
+          .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+          .join(' ');
+        seriesKey = seriesName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      }
+    }
+  }
+
+  if (!seriesKey) {
+    seriesKey = 'serie-desconocida';
+    seriesName = 'Serie Desconocida';
+  }
+
+  // 4. Detección de calidad de audio y video
+  let quality = '1080p HD';
+  if (lowerName.includes('dual')) {
+    quality = '1080p Dual Latino / Inglés';
+  } else if (lowerName.includes('lat') || lowerName.includes('latino')) {
+    quality = '1080p HD Latino';
+  } else if (lowerName.includes('castellano') || lowerName.includes('esp')) {
+    quality = '1080p Castellano';
+  } else if (lowerName.includes('4k') || lowerName.includes('2160p')) {
+    quality = '4K Ultra HD';
+  } else if (lowerName.includes('720p')) {
+    quality = '720p HD';
+  }
+
+  const cleanTitle = fullName.replace(/[,;]+$/, '').trim();
+
+  return {
+    fileId: id,
+    title: cleanTitle,
+    quality,
+    seriesKey,
+    seriesName,
+    season,
+    episode,
+    folderPath,
   };
+}
 
-  for (const file of rawFiles) {
-    parseMultiSeriesEpisode(file.name, file.fileId, seriesGroups);
+async function main() {
+  console.log(`\n╔══════════════════════════════════════════════════════════════════════╗`);
+  console.log(`║  📺 Cronology - Sincronizador Multi-Serie y Temporadas Google Drive  ║`);
+  console.log(`╚══════════════════════════════════════════════════════════════════════╝`);
+  console.log(`\n📡 Carpeta Raíz:`);
+  console.log(`   📁 ID:  ${ROOT_FOLDER_ID}`);
+  console.log(`   🔗 URL: ${ROOT_FOLDER_URL}\n`);
+
+  // Paso 1: Escaneo recursivo
+  console.log(`🔍 Paso 1/4 — Escaneando carpetas y subcarpetas recursivamente...`);
+  const crawlResults = await crawlDriveFolder(ROOT_FOLDER_ID);
+
+  console.log(`\n📋 Resumen de escaneo de Google Drive:`);
+  console.log(`   • Total elementos encontrados:  ${crawlResults.videos.length + crawlResults.nonVideos.length}`);
+  console.log(`   • Archivos de video detectados: ${crawlResults.videos.length}`);
+  console.log(`   • Archivos no-video omitidos:   ${crawlResults.nonVideos.length}`);
+  console.log(`   • Carpetas exploradas:          ${crawlResults.subfoldersScanned}`);
+
+  if (crawlResults.nonVideos.length > 0) {
+    console.log(`\n   ℹ️ Archivos no-video ignorados (${crawlResults.nonVideos.length}):`);
+    crawlResults.nonVideos.forEach((nv) => {
+      console.log(`      📄 [${nv.folderPath.join('/') || 'Raíz'}] ${nv.name}`);
+    });
   }
 
-  // ─── 1. Procesar GRIMM y guardar en services/googleDrive.ts ────────────────
-  const grimmGroup = seriesGroups['grimm'];
-  const grimmScanned = grimmGroup ? grimmGroup.episodes : {};
+  // Paso 2: Clasificar por Serie y por Temporada
+  console.log(`\n🔍 Paso 2/4 — Clasificando archivos por Serie y por Temporada...`);
 
-  const servicePath = path.join(__dirname, '..', 'services', 'googleDrive.ts');
-  let serviceContent = fs.readFileSync(servicePath, 'utf8');
+  // Estructura:
+  // seriesMap[seriesKey] = {
+  //   seriesKey, seriesName, folderUrl, folderId,
+  //   seasons: { 1: { epKey: { fileId, title, quality, season, episode } } },
+  //   episodes: { epKey: { fileId, title, quality, season, episode } }
+  // }
+  const seriesMap = {};
 
-  // Leer episodios actuales de Grimm (filtrando los que por error tenían "gravity")
-  const existingGrimmEpisodes = {};
-  const existingRegex = /'(grimm-s[1-9]\d*e[1-9]\d*)':\s*\{\s*fileId:\s*'([^']+)',\s*title:\s*'([^']+)',\s*quality:\s*'([^']+)',?\s*\}/g;
-  let exMatch;
-  while ((exMatch = existingRegex.exec(serviceContent)) !== null) {
-    const key = exMatch[1];
-    const fileId = exMatch[2];
-    const title = exMatch[3];
-    const quality = exMatch[4];
-    // Excluir cualquier archivo que pertenezca a Gravity Falls
-    if (/gravity/i.test(title)) continue;
-    if (fileId.length >= 28 && !fileId.startsWith('AAAAA')) {
-      existingGrimmEpisodes[key] = { fileId, title, quality };
+  for (const item of crawlResults.videos) {
+    const parsed = parseVideoItem(item);
+    if (!parsed) continue;
+
+    const { seriesKey, seriesName, season, episode, fileId, title, quality } = parsed;
+
+    if (!seriesMap[seriesKey]) {
+      seriesMap[seriesKey] = {
+        seriesKey,
+        seriesName,
+        folderUrl: ROOT_FOLDER_URL,
+        folderId: ROOT_FOLDER_ID,
+        seasons: {},
+        episodes: {},
+      };
     }
+
+    if (!seriesMap[seriesKey].seasons[season]) {
+      seriesMap[seriesKey].seasons[season] = {};
+    }
+
+    const epKey = `${seriesKey}-s${season}e${episode}`;
+    const epObj = { fileId, title, quality, season, episode };
+
+    seriesMap[seriesKey].seasons[season][epKey] = epObj;
+    seriesMap[seriesKey].episodes[epKey] = epObj;
   }
 
-  // Merge Grimm: los escaneados tienen prioridad
-  const mergedGrimm = { ...existingGrimmEpisodes, ...grimmScanned };
+  // Paso 3: Guardar en los servicios de Cronology
+  console.log(`\n💾 Paso 3/4 — Guardando datos organizados en el sistema...`);
 
-  console.log(`───────────────────────────────────────────────────────────`);
-  console.log(`📺 Grimm: ${Object.keys(mergedGrimm).length} capítulos organizados`);
-  Object.keys(mergedGrimm)
-    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-    .forEach((k) => console.log(`   ✅ ${k} -> ${mergedGrimm[k].title}`));
+  // 3.1: Procesar GRIMM y guardar en services/googleDrive.ts
+  if (seriesMap['grimm']) {
+    const grimmGroup = seriesMap['grimm'];
+    const servicePath = path.join(__dirname, '..', 'services', 'googleDrive.ts');
+    let serviceContent = fs.readFileSync(servicePath, 'utf8');
 
-  // Escribir GRIMM_DRIVE_EPISODES en services/googleDrive.ts
-  const serializedGrimm = Object.entries(mergedGrimm)
-    .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
-    .map(
-      ([key, data]) => `  '${key}': {
+    // Leer episodios existentes (excluyendo cualquier contaminación previa)
+    const existingGrimm = {};
+    const existingRegex = /'(grimm-s[1-9]\d*e[1-9]\d*)':\s*\{\s*fileId:\s*'([^']+)',\s*title:\s*'([^']+)',\s*quality:\s*'([^']+)',?\s*\}/g;
+    let exMatch;
+    while ((exMatch = existingRegex.exec(serviceContent)) !== null) {
+      const key = exMatch[1];
+      const fileId = exMatch[2];
+      const title = exMatch[3];
+      const quality = exMatch[4];
+      if (/gravity/i.test(title)) continue;
+      if (fileId.length >= 28 && !fileId.startsWith('AAAAA')) {
+        existingGrimm[key] = { fileId, title, quality };
+      }
+    }
+
+    const mergedGrimm = { ...existingGrimm, ...grimmGroup.episodes };
+
+    const serializedGrimm = Object.entries(mergedGrimm)
+      .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
+      .map(
+        ([key, data]) => `  '${key}': {
     fileId: '${data.fileId}',
     title: '${data.title}',
     quality: '${data.quality}',
   },`
-    )
-    .join('\n');
+      )
+      .join('\n');
 
-  const replacementBlock = `export const GRIMM_DRIVE_EPISODES: Record<string, { fileId: string; title: string; quality: string }> = {\n${serializedGrimm}\n};`;
+    const replacementBlock = `export const GRIMM_DRIVE_EPISODES: Record<string, { fileId: string; title: string; quality: string }> = {\n${serializedGrimm}\n};`;
 
-  serviceContent = serviceContent.replace(
-    /export const GRIMM_DRIVE_EPISODES: Record<string, \{ fileId: string; title: string; quality: string \}> = \{[\s\S]*?\};/,
-    replacementBlock
-  );
+    serviceContent = serviceContent.replace(
+      /export const GRIMM_DRIVE_EPISODES: Record<string, \{ fileId: string; title: string; quality: string \}> = \{[\s\S]*?\};/,
+      replacementBlock
+    );
 
-  fs.writeFileSync(servicePath, serviceContent, 'utf8');
-  console.log(`\n💾 Archivo services/googleDrive.ts actualizado para Grimm.`);
+    fs.writeFileSync(servicePath, serviceContent, 'utf8');
+    console.log(`   ✅ Actualizado services/googleDrive.ts (Grimm)`);
+  }
 
-  // ─── 2. Procesar GRAVITY FALLS y otras series en syncedSeriesEpisodes ─────
+  // 3.2: Guardar todas las series en syncedSeriesEpisodes.json y .ts
   const jsonPath = path.join(__dirname, '..', 'services', 'syncedSeriesEpisodes.json');
   let syncedData = {};
   if (fs.existsSync(jsonPath)) {
@@ -145,162 +442,98 @@ async function syncDrive() {
     }
   }
 
-  for (const [key, group] of Object.entries(seriesGroups)) {
-    if (key === 'grimm') continue; // Grimm ya se guardó en googleDrive.ts
-    const epCount = Object.keys(group.episodes).length;
-    if (epCount > 0) {
-      console.log(`\n───────────────────────────────────────────────────────────`);
-      console.log(`📺 ${group.seriesName}: ${epCount} capítulos organizados`);
-      Object.keys(group.episodes)
-        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-        .forEach((k) => console.log(`   ✅ ${k} -> ${group.episodes[k].title}`));
+  for (const [key, group] of Object.entries(seriesMap)) {
+    const seasonsCount = Object.keys(group.seasons).length;
+    const episodesCount = Object.keys(group.episodes).length;
 
-      syncedData[key] = {
-        seriesKey: group.seriesKey,
-        seriesName: group.seriesName,
-        folderUrl: group.folderUrl,
-        folderId: group.folderId,
-        episodes: group.episodes,
-      };
+    syncedData[key] = {
+      seriesKey: group.seriesKey,
+      seriesName: group.seriesName,
+      folderUrl: group.folderUrl,
+      folderId: group.folderId,
+      seasonsCount,
+      episodesCount,
+      seasons: group.seasons,
+      episodes: group.episodes,
+    };
 
-      // Auto-registrar metadatos en DB si faltan
-      await syncDatabaseMetadata(group.seriesName);
-    }
+    // Auto-registrar en Neon DB con TMDB si falta la ficha
+    await ensureSeriesInDatabase(group.seriesName);
   }
 
-  // Guardar JSON y TS de series sincronizadas
   fs.writeFileSync(jsonPath, JSON.stringify(syncedData, null, 2), 'utf8');
-  console.log(`💾 JSON guardado: services/syncedSeriesEpisodes.json`);
+  console.log(`   ✅ Guardado services/syncedSeriesEpisodes.json`);
 
   const tsPath = path.join(__dirname, '..', 'services', 'syncedSeriesEpisodes.ts');
   const tsContent = `/**
  * services/syncedSeriesEpisodes.ts
- * Auto-generado por scripts/sync-drive.js y sync-series.js
- * Contiene episodios sincronizados de carpetas de Google Drive.
+ * Auto-generado por scripts/sync-drive.js
+ * Catálogo estructurado por Series y por Temporadas desde Google Drive.
  * NO EDITAR MANUALMENTE - se sobreescribe al sincronizar.
  * 
  * Última actualización: ${new Date().toISOString()}
  * Series sincronizadas: ${Object.keys(syncedData).length}
  */
 
+export interface SyncedEpisode {
+  fileId: string;
+  title: string;
+  quality: string;
+  season?: number;
+  episode?: number;
+}
+
 export interface SyncedSeriesEntry {
   seriesKey: string;
   seriesName: string;
   folderUrl: string;
   folderId: string;
-  episodes: Record<string, { fileId: string; title: string; quality: string }>;
+  seasonsCount?: number;
+  episodesCount?: number;
+  seasons?: Record<number, Record<string, SyncedEpisode>>;
+  episodes: Record<string, SyncedEpisode>;
 }
 
 export const SYNCED_SERIES_DATA: Record<string, SyncedSeriesEntry> = ${JSON.stringify(syncedData, null, 2)};
 `;
 
   fs.writeFileSync(tsPath, tsContent, 'utf8');
-  console.log(`💾 TypeScript guardado: services/syncedSeriesEpisodes.ts`);
+  console.log(`   ✅ Guardado services/syncedSeriesEpisodes.ts`);
 
-  console.log(`\n╔══════════════════════════════════════════════════════════╗`);
-  console.log(`║  🎉 Sincronización Multi-Serie completada con éxito     ║`);
-  console.log(`╚══════════════════════════════════════════════════════════╝`);
-  console.log(`\nResumen de series sincronizadas en su lugar correcto:`);
-  console.log(`   📺 Grimm:          ${Object.keys(mergedGrimm).length} capítulos (en services/googleDrive.ts)`);
-  Object.entries(syncedData).forEach(([k, data]) => {
-    console.log(`   📺 ${data.seriesName}: ${Object.keys(data.episodes).length} capítulos (en services/syncedSeriesEpisodes.ts)`);
-  });
-  console.log('');
+  // Paso 4: Resumen estructurado por Series y Temporadas
+  console.log(`\n══════════════════════════════════════════════════════════════════════`);
+  console.log(`  🎉 RESUMEN DE SERIES Y TEMPORADAS SINCRONIZADAS`);
+  console.log(`══════════════════════════════════════════════════════════════════════\n`);
+
+  for (const [key, group] of Object.entries(seriesMap)) {
+    const totalEps = Object.keys(group.episodes).length;
+    const seasonNumbers = Object.keys(group.seasons).sort((a, b) => Number(a) - Number(b));
+
+    console.log(`📺 ${group.seriesName} (${key}) — Total: ${totalEps} capítulos listos:`);
+
+    for (const sNum of seasonNumbers) {
+      const sEps = group.seasons[sNum];
+      const sCount = Object.keys(sEps).length;
+      console.log(`   📁 Temporada ${sNum} (${sCount} capítulos):`);
+
+      Object.entries(sEps)
+        .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
+        .forEach(([epKey, epData]) => {
+          console.log(`      • ${epKey} -> ${epData.title} [${epData.quality}]`);
+        });
+    }
+    console.log('');
+  }
+
+  console.log(`══════════════════════════════════════════════════════════════════════`);
+  console.log(`✅ ¡Todo sincronizado y organizado por series y temporadas con éxito!`);
+  console.log(`══════════════════════════════════════════════════════════════════════\n`);
 }
 
 /**
- * Analiza el nombre del archivo y lo asigna a la serie y capítulo correspondiente
+ * Verifica y registra la serie en Neon DB con TMDB si aún no existe
  */
-function parseMultiSeriesEpisode(fullName, fileId, seriesGroups) {
-  if (!fullName || !fileId) return;
-
-  // Filtrar archivos no deseados
-  if (fileId.length < 28 || fileId.startsWith('AAAAA') || fileId.startsWith('googlelogo')) return;
-  if (/\.(?:svg|png|jpg|jpeg|css|js|json|html|xml|txt|doc|docx)$/i.test(fullName)) return;
-  if (/^(?:desktop\.ini|\.ds_store|thumbs\.db|documento sin t[ií]tulo)$/i.test(fullName.trim())) return;
-  if (fullName.includes('googlelogo') || fullName.includes('@media')) return;
-
-  // Detectar temporada y episodio
-  const epMatch =
-    fullName.match(/[sS](\d{1,2})[eE](\d{1,3})/) ||
-    fullName.match(/(\d{1,2})[xX](\d{1,3})/) ||
-    fullName.match(/[._\s-](\d{1,2})[._\s-]?[eE](\d{1,3})/i) ||
-    fullName.match(/(?:temp|temporada|season)[._\s-]*(\d{1,2})[._\s-]*(?:ep|episode|cap|capitulo)?[._\s-]*(\d{1,3})/i);
-
-  if (!epMatch) return;
-
-  const season = parseInt(epMatch[1], 10);
-  const episode = parseInt(epMatch[2], 10);
-  if (season < 1 || season > 30) return;
-  if (episode < 1 || episode > 99) return;
-
-  // Detección de calidad de audio y video
-  const lower = fullName.toLowerCase();
-  let quality = '1080p HD';
-  if (lower.includes('dual')) {
-    quality = '1080p Dual Latino / Inglés';
-  } else if (lower.includes('lat') || lower.includes('latino')) {
-    quality = '1080p HD Latino';
-  } else if (lower.includes('castellano') || lower.includes('esp')) {
-    quality = '1080p Castellano';
-  } else if (lower.includes('4k') || lower.includes('2160p')) {
-    quality = '4K Ultra HD';
-  } else if (lower.includes('720p')) {
-    quality = '720p HD';
-  }
-
-  const cleanTitle = fullName.replace(/[,;]+$/, '').trim();
-
-  // ── Identificar Serie ──────────────────────────────────────────────────────
-  let targetSeriesKey = '';
-  let targetSeriesName = '';
-
-  if (/grimm/i.test(fullName)) {
-    targetSeriesKey = 'grimm';
-    targetSeriesName = 'Grimm';
-  } else if (/gravity[._\s-]*falls/i.test(fullName)) {
-    targetSeriesKey = 'gravity-falls';
-    targetSeriesName = 'Gravity Falls';
-  } else if (/chicago[._\s-]*med/i.test(fullName)) {
-    targetSeriesKey = 'chicago-med';
-    targetSeriesName = 'Chicago Med';
-  } else if (/chicago[._\s-]*fire/i.test(fullName)) {
-    targetSeriesKey = 'chicago-fire';
-    targetSeriesName = 'Chicago Fire';
-  } else if (/chicago[._\s-]*p\.?d\.?/i.test(fullName)) {
-    targetSeriesKey = 'chicago-pd';
-    targetSeriesName = 'Chicago P.D.';
-  } else {
-    // Detectar nombre antes del código de temporada/episodio
-    const prefix = fullName.split(/[sS]\d{1,2}[eE]\d{1,2}|\d{1,2}[xX]\d{1,2}/)[0];
-    const cleaned = prefix.replace(/[._\-]+/g, ' ').trim();
-    if (cleaned.length >= 2) {
-      targetSeriesName = cleaned.replace(/\b\w/g, (c) => c.toUpperCase());
-      targetSeriesKey = targetSeriesName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    }
-  }
-
-  if (!targetSeriesKey) return;
-
-  if (!seriesGroups[targetSeriesKey]) {
-    seriesGroups[targetSeriesKey] = {
-      seriesKey: targetSeriesKey,
-      seriesName: targetSeriesName,
-      folderUrl: FOLDER_URL,
-      folderId: FOLDER_ID,
-      episodes: {},
-    };
-  }
-
-  const epKey = `${targetSeriesKey}-s${season}e${episode}`;
-  seriesGroups[targetSeriesKey].episodes[epKey] = {
-    fileId,
-    title: cleanTitle,
-    quality,
-  };
-}
-
-async function syncDatabaseMetadata(seriesName) {
+async function ensureSeriesInDatabase(seriesName) {
   const DATABASE_URL = process.env.DATABASE_URL;
   if (!DATABASE_URL) return;
 
@@ -314,14 +547,12 @@ async function syncDatabaseMetadata(seriesName) {
 
   try {
     const existing = await sql`
-      SELECT id, name, poster_url FROM series
+      SELECT id, name FROM series
       WHERE LOWER(name) = LOWER(${seriesName}) OR LOWER(original_name) = LOWER(${seriesName})
       LIMIT 1
     `;
 
-    if (existing.length > 0) {
-      return; // Ya existe en la BD
-    }
+    if (existing.length > 0) return; // Ya existe
 
     const TMDB_BEARER = process.env.EXPO_PUBLIC_TMDB_BEARER_TOKEN || '';
     const TMDB_KEY = process.env.EXPO_PUBLIC_TMDB_API_KEY || '';
@@ -369,13 +600,13 @@ async function syncDatabaseMetadata(seriesName) {
       ) RETURNING id
     `;
 
-    console.log(`   ✅ Serie "${newSeries.name}" registrada en BD con póster: ${posterUrl}`);
+    console.log(`   ✨ Ficha de "${newSeries.name}" creada en BD con carátula oficial TMDB`);
   } catch (err) {
-    // Silencioso si falla metadatos
+    // Silencioso
   }
 }
 
-syncDrive().catch((err) => {
-  console.error('❌ Error al sincronizar Google Drive:', err);
+main().catch((err) => {
+  console.error('\n❌ Error al sincronizar:', err);
   process.exit(1);
 });

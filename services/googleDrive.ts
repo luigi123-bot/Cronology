@@ -132,6 +132,106 @@ export const GRIMM_DRIVE_EPISODES: Record<string, { fileId: string; title: strin
     title: 'Grimm.2x02.Dual.1080p-lat.mp4',
     quality: '1080p Dual Latino / Inglés',
   },
+  'grimm-s2e3': {
+    fileId: '18lQqsLYTqxM0OIGTS8dyT6oKrszDbkCp',
+    title: 'Grimm.2x03.Dual.1080p-lat.mkv',
+    quality: '1080p Dual Latino / Inglés',
+  },
+  'grimm-s2e4': {
+    fileId: '15wA08oI24TY8t8lDMWoxXThu8L_oJx0u',
+    title: 'Grimm.2x04.Dual.1080p-lat.mkv',
+    quality: '1080p Dual Latino / Inglés',
+  },
+  'grimm-s2e5': {
+    fileId: '1NlQ-i5Z9Cm-yjuTSZ0uVLQyVnjfyv2-1',
+    title: 'Grimm.2x05.Dual.1080p-lat.mkv',
+    quality: '1080p Dual Latino / Inglés',
+  },
+  'grimm-s2e6': {
+    fileId: '1Dx0J2icLvyV6ONn8UFuXZV1d6YDy1I5F',
+    title: 'Grimm.2x06.Dual.1080p-lat.mkv',
+    quality: '1080p Dual Latino / Inglés',
+  },
+  'grimm-s2e7': {
+    fileId: '12BPfIzxaBF4c1hT5wq23hBTJE0ki9Mz8',
+    title: 'Grimm.2x07.Dual.1080p-lat.mkv',
+    quality: '1080p Dual Latino / Inglés',
+  },
+  'grimm-s2e8': {
+    fileId: '1S68fLFoGbdVj8J2cc8wf3-8UqRVocwJe',
+    title: 'Grimm.2x08.Dual.1080p-lat.mkv',
+    quality: '1080p Dual Latino / Inglés',
+  },
+  'grimm-s2e9': {
+    fileId: '1sVeyXL_dsZDU1wMPlItj9MgeMyySl1ZF',
+    title: 'Grimm.2x09.Dual.1080p-lat.mkv',
+    quality: '1080p Dual Latino / Inglés',
+  },
+  'grimm-s2e10': {
+    fileId: '1vStalSSo7uxZMhISdP2xMWtXq9qE1TY7',
+    title: 'Grimm.2x10.Dual.1080p-lat.mkv',
+    quality: '1080p Dual Latino / Inglés',
+  },
+  'grimm-s2e11': {
+    fileId: '1y90b9xfMhTXdRUTMxV5W_XKqb17FBlq3',
+    title: 'Grimm.2x11.Dual.1080p-lat.mkv',
+    quality: '1080p Dual Latino / Inglés',
+  },
+  'grimm-s2e12': {
+    fileId: '1UEB8YSNDHvGdzwIgk-ApAU-s3qR6ZuUN',
+    title: 'Grimm.2x12.Dual.1080p-lat.mkv',
+    quality: '1080p Dual Latino / Inglés',
+  },
+  'grimm-s2e13': {
+    fileId: '1AmY9_eI3x_SiBiE-c_t81Us0uxbhiZgB',
+    title: 'Grimm.2x13.Dual.1080p-lat.mkv',
+    quality: '1080p Dual Latino / Inglés',
+  },
+  'grimm-s2e14': {
+    fileId: '1EPVHTiP4UzGgYEFBHUGibvLxpiFtZO1W',
+    title: 'Grimm.2x14.Dual.1080p-lat.mkv',
+    quality: '1080p Dual Latino / Inglés',
+  },
+  'grimm-s2e15': {
+    fileId: '1sz5LqUVgFdxDSzYpVl3bJ7DwMDNEAhpl',
+    title: 'Grimm.2x15.Dual.1080p-lat.mkv',
+    quality: '1080p Dual Latino / Inglés',
+  },
+  'grimm-s2e16': {
+    fileId: '1eQgyXDb_JFv2zOQe7kjrA3KuLBWu2oSQ',
+    title: 'Grimm.2x16.Dual.1080p-lat.mkv',
+    quality: '1080p Dual Latino / Inglés',
+  },
+  'grimm-s2e17': {
+    fileId: '1ZoxMpoaPz7og4PG_6Bc1utBrigk9g0Bs',
+    title: 'Grimm.2x17.Dual.1080p-lat.mkv',
+    quality: '1080p Dual Latino / Inglés',
+  },
+  'grimm-s2e18': {
+    fileId: '1CO_taksgEHNGgkA0iUDAbuvNYcvTrse1',
+    title: 'Grimm.2x18.Dual.1080p-lat.mkv',
+    quality: '1080p Dual Latino / Inglés',
+  },
+  'grimm-s2e19': {
+    fileId: '1EMls6FkD7QMrVrSIikeQRi-hfhoYXTkX',
+    title: 'Grimm.2x19.Dual.1080p-lat.mkv',
+    quality: '1080p Dual Latino / Inglés',
+  },
+  'grimm-s2e20': {
+    fileId: '118fvEBoEFtktlYIYsmPhArZS1w_G34W5',
+    title: 'Grimm.2x20.Dual.1080p-lat.mkv',
+    quality: '1080p Dual Latino / Inglés',
+  },
+  'grimm-s2e21': {
+    fileId: '1243kzbDM9KIaW_owr_SSXEzM1eXOT-6U',
+    title: 'Grimm.2x21.Dual.1080p-lat.mkv',
+    quality: '1080p Dual Latino / Inglés',
+  },
+  'grimm-s2e22': {
+    fileId: '1vAwKUDiiOV782AYhZ6VQ0w4dKVuz08De',
+    title: 'Grimm.2x22.Dual.1080p-lat.mkv',
+    quality: '1080p Dual Latino / Inglés',
+  },
 };
 
 /**
