@@ -23,10 +23,13 @@ import { eq, and } from 'drizzle-orm';
 import { getRecommendationsByGenre } from '@/services/tmdb';
 import type { SeriesWithProgress, TMDBSearchResult } from '@/types';
 import WebHeader from '@/components/WebHeader';
+import ContinueWatchingShelf from '@/components/ContinueWatchingShelf';
 import { DRIVE_MOVIES } from '@/services/googleDriveMovies';
 import {
   getLocalWatchedEpisodeIds,
   getAllSeriesCurrentEpisodes,
+  getOrSeedContinueWatching,
+  dismissSeriesFromContinue,
   type SeriesCurrentProgress,
 } from '@/services/watchProgress';
 
@@ -83,7 +86,15 @@ export default function HomeScreen() {
         ...Array.from(localWatched),
       ]);
 
-      const currentProgressMap = getAllSeriesCurrentEpisodes();
+      const currentProgressMap = getOrSeedContinueWatching(
+        dbSeries.map((s) => ({
+          id: s.id,
+          name: s.name,
+          bannerUrl: s.bannerUrl,
+          posterUrl: s.posterUrl,
+          firstAirDate: s.firstAirDate,
+        }))
+      );
       setSeriesCurrentMap(currentProgressMap);
 
       const seriesWithProgress: SeriesWithProgress[] = dbSeries.map((s) => {
@@ -108,6 +119,7 @@ export default function HomeScreen() {
           youtubeTrailerId: s.youtubeTrailerId,
           isChicagoUniverse: s.isChicagoUniverse ?? false,
           sortOrder: s.sortOrder ?? 999,
+          firstAirDate: s.firstAirDate,
         };
       });
 
@@ -156,6 +168,19 @@ export default function HomeScreen() {
     () => seriesList.filter((s) => !s.isChicagoUniverse).sort((a, b) => a.sortOrder - b.sortOrder),
     [seriesList]
   );
+
+  const handleRemoveContinue = useCallback((seriesId: number) => {
+    dismissSeriesFromContinue(seriesId);
+    setSeriesCurrentMap((prev) => {
+      const next = { ...prev };
+      delete next[seriesId];
+      return next;
+    });
+  }, []);
+
+  const continueItems = useMemo(() => {
+    return Object.values(seriesCurrentMap).sort((a, b) => b.updatedAt - a.updatedAt);
+  }, [seriesCurrentMap]);
 
   // Responsive card dimensions for native
   const nativeCardWidth = useMemo(() => {
@@ -432,6 +457,14 @@ export default function HomeScreen() {
                 </LinearGradient>
               </Pressable>
             </View>
+          )}
+
+          {/* Sección Continúa Viendo estilo streaming (Palomitas rojas, tarjetas 16:9, papelera amarilla y barra de progreso) */}
+          {(activeCategory === 'all' || activeCategory === 'series' || activeCategory === 'chicago') && continueItems.length > 0 && (
+            <ContinueWatchingShelf
+              items={continueItems}
+              onRemoveItem={handleRemoveContinue}
+            />
           )}
 
           {/* Section: One Chicago Universe */}

@@ -67,6 +67,9 @@ export default function EpisodeDetailScreen() {
         episodeNumber: ep.episodeNumber,
         episodeId: ep.id,
         episodeName: ep.name,
+        year: s?.firstAirDate ? s.firstAirDate.slice(0, 4) : undefined,
+        bannerUrl: s?.bannerUrl ?? s?.posterUrl ?? '',
+        progressPercent: 45,
       });
 
       const [prog] = await db

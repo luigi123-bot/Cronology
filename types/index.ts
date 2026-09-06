@@ -16,6 +16,7 @@ export interface SeriesWithProgress {
   youtubeTrailerId: string | null;
   isChicagoUniverse: boolean;
   sortOrder: number;
+  firstAirDate?: string | null;
 }
 
 export interface EpisodeWithProgress {

@@ -18,11 +18,15 @@ export interface SeriesCurrentProgress {
   episodeId: number;
   episodeName: string;
   updatedAt: number;
+  year?: string | number;
+  bannerUrl?: string | null;
+  progressPercent?: number;
 }
 
 const STORAGE_PREFIX = 'cronology_watch_';
 const SERIES_PROGRESS_PREFIX = 'cronology_series_current_';
 const WATCHED_EPISODES_KEY = 'cronology_watched_episodes';
+const DISMISSED_SERIES_KEY = 'cronology_dismissed_continue_series';
 
 // ─── Sesiones individuales de video ──────────────────────────────────────────
 
@@ -56,6 +60,35 @@ export function clearWatchSession(mediaKey: string): void {
   } catch {}
 }
 
+// ─── Control de series descartadas de "Continúa viendo" ───────────────────────
+
+export function getDismissedSeriesIds(): Set<number> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = localStorage.getItem(DISMISSED_SERIES_KEY);
+    if (!raw) return new Set();
+    return new Set(JSON.parse(raw));
+  } catch {
+    return new Set();
+  }
+}
+
+export function dismissSeriesFromContinue(seriesId: number): void {
+  if (typeof window === 'undefined') return;
+  try {
+    // 1. Eliminar de progreso actual
+    localStorage.removeItem(`${SERIES_PROGRESS_PREFIX}${seriesId}`);
+    // 2. Registrar en lista de descartadas para no resembrarla
+    const dismissed = getDismissedSeriesIds();
+    dismissed.add(seriesId);
+    localStorage.setItem(DISMISSED_SERIES_KEY, JSON.stringify(Array.from(dismissed)));
+  } catch {}
+}
+
+export function removeSeriesCurrentEpisode(seriesId: number): void {
+  dismissSeriesFromContinue(seriesId);
+}
+
 // ─── Seguimiento del capítulo donde vas por serie ────────────────────────────
 
 export function saveSeriesCurrentEpisode(
@@ -64,6 +97,13 @@ export function saveSeriesCurrentEpisode(
 ): void {
   if (typeof window === 'undefined') return;
   try {
+    // Si se reanuda, reactivamos de la lista de descartadas
+    const dismissed = getDismissedSeriesIds();
+    if (dismissed.has(seriesId)) {
+      dismissed.delete(seriesId);
+      localStorage.setItem(DISMISSED_SERIES_KEY, JSON.stringify(Array.from(dismissed)));
+    }
+
     const progress: SeriesCurrentProgress = {
       ...data,
       seriesId,
@@ -106,6 +146,57 @@ export function getAllSeriesCurrentEpisodes(): Record<number, SeriesCurrentProgr
     return {};
   }
 }
+
+/**
+ * Inicializa valores por defecto de "Continúa viendo" si el usuario aún no tiene
+ * progreso guardado (ej. Chicago Med 1x17 y Grimm 1x13 según el catálogo).
+ */
+export function getOrSeedContinueWatching(
+  availableSeries: { id: number; name: string; bannerUrl?: string | null; posterUrl?: string | null; firstAirDate?: string | null }[]
+): Record<number, SeriesCurrentProgress> {
+  const current = getAllSeriesCurrentEpisodes();
+  const dismissed = getDismissedSeriesIds();
+
+  // Si ya tiene progreso guardado o ya descartó elementos, respetamos el estado del usuario
+  if (Object.keys(current).length > 0 || dismissed.size > 0) {
+    return current;
+  }
+
+  // Si está limpio y no hay descartadas, sembramos los dos items de demostración iniciales
+  const seedItems: SeriesCurrentProgress[] = [
+    {
+      seriesId: 2,
+      seriesName: 'Chicago Med',
+      seasonNumber: 1,
+      episodeNumber: 17,
+      episodeId: 56,
+      episodeName: 'Withdrawal',
+      year: '2015',
+      bannerUrl: 'https://image.tmdb.org/t/p/w1280/x2jNLrYw1s9i6kihEJqsBQgs9nR.jpg',
+      progressPercent: 62,
+      updatedAt: Date.now() - 1000 * 60 * 30, // hace 30 mins
+    },
+    {
+      seriesId: 6,
+      seriesName: 'Grimm',
+      seasonNumber: 1,
+      episodeNumber: 13,
+      episodeId: 1318,
+      episodeName: 'Tres monedas a la fuente',
+      year: '2011',
+      bannerUrl: 'https://image.tmdb.org/t/p/w1280/oS3nip9GGsx5A7vWp8A1cazqJlF.jpg',
+      progressPercent: 14,
+      updatedAt: Date.now() - 1000 * 60 * 120, // hace 2 horas
+    },
+  ];
+
+  seedItems.forEach((item) => {
+    saveSeriesCurrentEpisode(item.seriesId, item);
+  });
+
+  return getAllSeriesCurrentEpisodes();
+}
+
 
 // ─── Capítulos ya vistos (Local y sincronizado) ───────────────────────────────
 
