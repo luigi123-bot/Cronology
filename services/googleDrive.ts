@@ -5,6 +5,8 @@
  * registro dinámico de carpetas de Drive por parte del administrador (Luis Gotopo).
  */
 
+import { SYNCED_SERIES_DATA } from './syncedSeriesEpisodes';
+
 export const GRIMM_DRIVE_FOLDER_ID = '1lVqDRczGqe-3cYuTcD_NC2Nu0n955TjS';
 export const GRIMM_DRIVE_FOLDER_URL = `https://drive.google.com/drive/folders/${GRIMM_DRIVE_FOLDER_ID}?usp=sharing`;
 
@@ -118,6 +120,16 @@ export const GRIMM_DRIVE_EPISODES: Record<string, { fileId: string; title: strin
   'grimm-s1e22': {
     fileId: '1de2spze4gB0Wvh2cIRMIL-SJ-FwMksGS',
     title: 'Grimm.1x22.Dual.1080p-lat.mkv',
+    quality: '1080p Dual Latino / Inglés',
+  },
+  'grimm-s2e1': {
+    fileId: '14Wj65ISotMPqbfewAU21OUCY1kDJLNj9',
+    title: 'Grimm.2x01.Dual.1080p-lat.mp4',
+    quality: '1080p Dual Latino / Inglés',
+  },
+  'grimm-s2e2': {
+    fileId: '1WEHFqKHWTk3SzBTKgz1kZw_kK9LOZMKJ',
+    title: 'Grimm.2x02.Dual.1080p-lat.mp4',
     quality: '1080p Dual Latino / Inglés',
   },
 };
@@ -234,6 +246,7 @@ const CUSTOM_DRIVE_CONFIG_KEY = 'cronology_custom_drive_series';
  * Obtiene todas las carpetas registradas para series (pre-configuradas + añadidas por Luis).
  */
 export function getRegisteredDriveFolders(): Record<string, DriveSeriesConfig> {
+  // Series hardcodeadas
   const defaults: Record<string, DriveSeriesConfig> = {
     'chicago-med': {
       seriesKey: 'chicago-med',
@@ -255,13 +268,46 @@ export function getRegisteredDriveFolders(): Record<string, DriveSeriesConfig> {
     },
   };
 
+  // Merge series sincronizadas por sync-series.js / sync-drive.js
+  if (typeof SYNCED_SERIES_DATA !== 'undefined' && SYNCED_SERIES_DATA) {
+    for (const [key, entry] of Object.entries(SYNCED_SERIES_DATA)) {
+      defaults[key] = {
+        seriesKey: entry.seriesKey,
+        seriesName: entry.seriesName,
+        folderUrl: entry.folderUrl,
+        folderId: entry.folderId,
+        updatedAt: Date.now(),
+        episodesCount: Object.keys(entry.episodes || {}).length,
+        episodes: entry.episodes || {},
+      };
+    }
+  }
+
   if (typeof window === 'undefined') return defaults;
 
   try {
     const raw = localStorage.getItem(CUSTOM_DRIVE_CONFIG_KEY);
     if (!raw) return defaults;
     const stored: Record<string, DriveSeriesConfig> = JSON.parse(raw);
-    return { ...defaults, ...stored };
+
+    // Merge seguro: nunca permitir que un registro vacío de localStorage
+    // sobreescriba una serie que ya tiene episodios en defaults / SYNCED_SERIES_DATA
+    const merged: Record<string, DriveSeriesConfig> = { ...defaults };
+    for (const [k, conf] of Object.entries(stored)) {
+      if (!merged[k]) {
+        merged[k] = conf;
+      } else {
+        const storedCount = conf.episodes ? Object.keys(conf.episodes).length : 0;
+        const defaultCount = merged[k].episodes ? Object.keys(merged[k].episodes).length : 0;
+        merged[k] = {
+          ...merged[k],
+          ...conf,
+          episodes: storedCount >= defaultCount ? conf.episodes : merged[k].episodes,
+          episodesCount: Math.max(storedCount, defaultCount),
+        };
+      }
+    }
+    return merged;
   } catch {
     return defaults;
   }
@@ -278,13 +324,35 @@ export function saveRegisteredDriveFolder(
   const folderId = extractDriveId(folderUrl) || '';
   const seriesKey = seriesName.toLowerCase().replace(/[^a-z0-9]/g, '-');
 
+  console.log('[saveRegisteredDriveFolder] 📺 Serie:', seriesName);
+  console.log('[saveRegisteredDriveFolder] 🔑 Key:', seriesKey);
+  console.log('[saveRegisteredDriveFolder] 📁 Folder ID:', folderId);
+  console.log('[saveRegisteredDriveFolder] 🔗 URL:', folderUrl);
+
   let episodesToSave = customEpisodes || {};
+  console.log('[saveRegisteredDriveFolder] 📋 Episodios custom proporcionados:', Object.keys(episodesToSave).length);
+
+  // Buscar episodios en series hardcodeadas
   if (Object.keys(episodesToSave).length === 0) {
     if (seriesKey.includes('med')) {
       episodesToSave = CHICAGO_MED_DRIVE_EPISODES;
+      console.log('[saveRegisteredDriveFolder] ↪ Usando episodios hardcoded de Chicago Med:', Object.keys(episodesToSave).length);
     } else if (seriesKey.includes('grimm')) {
       episodesToSave = GRIMM_DRIVE_EPISODES;
+      console.log('[saveRegisteredDriveFolder] ↪ Usando episodios hardcoded de Grimm:', Object.keys(episodesToSave).length);
     }
+  }
+
+  // Buscar episodios en series sincronizadas por sync-series.js
+  if (Object.keys(episodesToSave).length === 0 && SYNCED_SERIES_DATA[seriesKey]) {
+    episodesToSave = SYNCED_SERIES_DATA[seriesKey].episodes;
+    console.log('[saveRegisteredDriveFolder] ↪ Usando episodios sincronizados (sync-series.js):', Object.keys(episodesToSave).length);
+  }
+
+  if (Object.keys(episodesToSave).length === 0) {
+    console.warn('[saveRegisteredDriveFolder] ⚠️ No se encontraron episodios para esta serie.');
+    console.warn('[saveRegisteredDriveFolder] 💡 Para sincronizar episodios, ejecuta:');
+    console.warn(`[saveRegisteredDriveFolder]    npm run sync:series -- -s "${seriesName}" -f "${folderUrl}"`);
   }
 
   const config: DriveSeriesConfig = {
@@ -297,17 +365,38 @@ export function saveRegisteredDriveFolder(
     episodes: episodesToSave,
   };
 
+  console.log('[saveRegisteredDriveFolder] ✅ Config generada:', {
+    seriesKey: config.seriesKey,
+    seriesName: config.seriesName,
+    episodesCount: config.episodesCount,
+  });
+
   if (typeof window !== 'undefined') {
     try {
       const all = getRegisteredDriveFolders();
       all[seriesKey] = config;
       localStorage.setItem(CUSTOM_DRIVE_CONFIG_KEY, JSON.stringify(all));
+      console.log('[saveRegisteredDriveFolder] 💾 Guardado en localStorage OK');
     } catch (e) {
-      console.error('Failed to save drive folder config:', e);
+      console.error('[saveRegisteredDriveFolder] ❌ Error al guardar en localStorage:', e);
     }
   }
 
   return config;
+}
+
+/**
+ * Elimina una carpeta registrada de Google Drive del almacenamiento local.
+ */
+export function removeRegisteredDriveFolder(seriesKey: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const all = getRegisteredDriveFolders();
+    delete all[seriesKey];
+    localStorage.setItem(CUSTOM_DRIVE_CONFIG_KEY, JSON.stringify(all));
+  } catch (e) {
+    console.error('Failed to remove drive folder config:', e);
+  }
 }
 
 /**
@@ -326,15 +415,88 @@ export function getDriveFileForEpisode(
   season: number,
   episode: number
 ): { fileId: string; title: string; quality: string; embedUrl: string; streamUrl: string } | null {
-  const norm = seriesName.toLowerCase().trim();
+  if (!seriesName) return null;
 
-  // 1. Buscar en carpetas configuradas por el usuario
+  const norm = seriesName.toLowerCase().trim();
+  const normKey = norm.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const epSuffix = `s${season}e${episode}`;
+
+  console.log(`[getDriveFileForEpisode] 🔍 Buscando: "${seriesName}" (key: "${normKey}"), T${season}E${episode}`);
+
+  // 1. Coincidencia directa en SYNCED_SERIES_DATA (garantía infalible de sync-drive / sync-series)
+  if (typeof SYNCED_SERIES_DATA !== 'undefined' && SYNCED_SERIES_DATA) {
+    for (const [key, entry] of Object.entries(SYNCED_SERIES_DATA)) {
+      const match =
+        key === normKey ||
+        norm.includes(key) ||
+        normKey.includes(key) ||
+        key.includes(normKey) ||
+        norm.includes(entry.seriesName.toLowerCase()) ||
+        entry.seriesName.toLowerCase().includes(norm);
+
+      if (match && entry.episodes) {
+        const found =
+          entry.episodes[`${key}-${epSuffix}`] ||
+          entry.episodes[`${normKey}-${epSuffix}`];
+
+        if (found) {
+          console.log(`[getDriveFileForEpisode] ✅ Encontrado en SYNCED_SERIES_DATA [${key}]:`, found.title);
+          return {
+            ...found,
+            embedUrl: `https://drive.google.com/file/d/${found.fileId}/preview`,
+            streamUrl: getDriveStreamUrl(found.fileId),
+          };
+        }
+      }
+    }
+  }
+
+  // 2. Coincidencia directa con Grimm
+  if (norm.includes('grimm')) {
+    const key = `grimm-${epSuffix}`;
+    const info = GRIMM_DRIVE_EPISODES[key];
+    if (info) {
+      console.log(`[getDriveFileForEpisode] ✅ Encontrado en GRIMM_DRIVE_EPISODES:`, info.title);
+      return {
+        ...info,
+        embedUrl: `https://drive.google.com/file/d/${info.fileId}/preview`,
+        streamUrl: getDriveStreamUrl(info.fileId),
+      };
+    }
+  }
+
+  // 3. Coincidencia directa con Chicago Med
+  if (norm.includes('med')) {
+    const key = `chicago-med-${epSuffix}`;
+    const info = CHICAGO_MED_DRIVE_EPISODES[key];
+    if (info) {
+      console.log(`[getDriveFileForEpisode] ✅ Encontrado en CHICAGO_MED_DRIVE_EPISODES:`, info.title);
+      return {
+        ...info,
+        embedUrl: `https://drive.google.com/file/d/${info.fileId}/preview`,
+        streamUrl: getDriveStreamUrl(info.fileId),
+      };
+    }
+  }
+
+  // 4. Buscar en carpetas configuradas por el usuario (localStorage y runtime)
   const allFolders = getRegisteredDriveFolders();
   for (const [key, conf] of Object.entries(allFolders)) {
-    if (norm.includes(key) || norm.includes(conf.seriesName.toLowerCase())) {
-      const epKey = `${key}-s${season}e${episode}`;
-      const found = conf.episodes[epKey];
+    const match =
+      key === normKey ||
+      norm.includes(key) ||
+      normKey.includes(key) ||
+      key.includes(normKey) ||
+      norm.includes(conf.seriesName.toLowerCase()) ||
+      conf.seriesName.toLowerCase().includes(norm);
+
+    if (match && conf.episodes) {
+      const found =
+        conf.episodes[`${key}-${epSuffix}`] ||
+        conf.episodes[`${normKey}-${epSuffix}`];
+
       if (found) {
+        console.log(`[getDriveFileForEpisode] ✅ Encontrado en allFolders [${key}]:`, found.title);
         return {
           ...found,
           embedUrl: `https://drive.google.com/file/d/${found.fileId}/preview`,
@@ -344,32 +506,7 @@ export function getDriveFileForEpisode(
     }
   }
 
-  // 2. Coincidencia directa con Chicago Med
-  if (norm.includes('med')) {
-    const key = `chicago-med-s${season}e${episode}`;
-    const info = CHICAGO_MED_DRIVE_EPISODES[key];
-    if (info) {
-      return {
-        ...info,
-        embedUrl: `https://drive.google.com/file/d/${info.fileId}/preview`,
-        streamUrl: getDriveStreamUrl(info.fileId),
-      };
-    }
-  }
-
-  // 3. Coincidencia directa con Grimm
-  if (norm.includes('grimm')) {
-    const key = `grimm-s${season}e${episode}`;
-    const info = GRIMM_DRIVE_EPISODES[key];
-    if (info) {
-      return {
-        ...info,
-        embedUrl: `https://drive.google.com/file/d/${info.fileId}/preview`,
-        streamUrl: getDriveStreamUrl(info.fileId),
-      };
-    }
-  }
-
+  console.warn(`[getDriveFileForEpisode] ❌ No se encontró archivo en Drive para "${seriesName}" T${season}E${episode}`);
   return null;
 }
 

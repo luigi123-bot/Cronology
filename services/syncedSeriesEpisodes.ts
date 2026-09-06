@@ -1,0 +1,103 @@
+/**
+ * services/syncedSeriesEpisodes.ts
+ * Auto-generado por scripts/sync-drive.js y sync-series.js
+ * Contiene episodios sincronizados de carpetas de Google Drive.
+ * NO EDITAR MANUALMENTE - se sobreescribe al sincronizar.
+ * 
+ * Última actualización: 2026-09-06T17:51:48.000Z
+ * Series sincronizadas: 1
+ */
+
+export interface SyncedSeriesEntry {
+  seriesKey: string;
+  seriesName: string;
+  folderUrl: string;
+  folderId: string;
+  episodes: Record<string, { fileId: string; title: string; quality: string }>;
+}
+
+export const SYNCED_SERIES_DATA: Record<string, SyncedSeriesEntry> = {
+  "gravity-falls": {
+    "seriesKey": "gravity-falls",
+    "seriesName": "Gravity Falls",
+    "folderUrl": "https://drive.google.com/drive/folders/1lVqDRczGqe-3cYuTcD_NC2Nu0n955TjS",
+    "folderId": "1lVqDRczGqe-3cYuTcD_NC2Nu0n955TjS",
+    "episodes": {
+      "gravity-falls-s1e1": {
+        "fileId": "1OLDAv3eG2DUy97K7kkjxPQZeW3bGcY13",
+        "title": "Gravity.Falls.S01E01.2012.1080p-Dual-Lat.mkv",
+        "quality": "1080p Dual Latino / Inglés"
+      },
+      "gravity-falls-s1e2": {
+        "fileId": "1dfx_nt81WhuNDijj762Ia5wZLG0IBgXF",
+        "title": "Gravity.Falls.S01E02.2012.1080p-Dual-Lat.mkv",
+        "quality": "1080p Dual Latino / Inglés"
+      },
+      "gravity-falls-s1e3": {
+        "fileId": "1TW_HCc_nIpnjx2MltMZcoPESNa1Jx7O0",
+        "title": "Gravity.Falls.S01E03.2012.1080p-Dual-Lat.mkv",
+        "quality": "1080p Dual Latino / Inglés"
+      },
+      "gravity-falls-s1e4": {
+        "fileId": "1uXeirkLHanSnZXY8RHCOwnMF6BPVm5QL",
+        "title": "Gravity.Falls.S01E04.2012.1080p-Dual-Lat.mkv",
+        "quality": "1080p Dual Latino / Inglés"
+      },
+      "gravity-falls-s1e5": {
+        "fileId": "1gWmQCFov8URfYW-Ar-7JTutwNc3T3UZn",
+        "title": "Gravity.Falls.S01E05.2012.1080p-Dual-Lat.mkv",
+        "quality": "1080p Dual Latino / Inglés"
+      },
+      "gravity-falls-s1e6": {
+        "fileId": "1wEMYgflnbcUIB3IWQCyla-rBxcWBOkIO",
+        "title": "Gravity.Falls.S01E06.2012.1080p-Dual-Lat.mkv",
+        "quality": "1080p Dual Latino / Inglés"
+      },
+      "gravity-falls-s1e7": {
+        "fileId": "1QG5AIuNZEkCdMrWTxWEGykZMQ9lUQSwF",
+        "title": "Gravity.Falls.S01E07.2012.1080p-Dual-Lat.mkv",
+        "quality": "1080p Dual Latino / Inglés"
+      },
+      "gravity-falls-s1e8": {
+        "fileId": "1XjUOheuOIJqg-Zx3wzxJvzy_etJUAfUA",
+        "title": "Gravity.Falls.S01E08.2012.1080p-Dual-Lat.mkv",
+        "quality": "1080p Dual Latino / Inglés"
+      },
+      "gravity-falls-s1e9": {
+        "fileId": "1lUZQaJfcZQoQMQvaersPPbn6ZWYexLqJ",
+        "title": "Gravity.Falls.S01E09.2012.1080p-Dual-Lat.mkv",
+        "quality": "1080p Dual Latino / Inglés"
+      },
+      "gravity-falls-s1e10": {
+        "fileId": "1Fx2UZNp0WapfV_aHBQzWMOW_Sl-Dm9QU",
+        "title": "Gravity.Falls.S01E10.2012.1080p-Dual-Lat.mkv",
+        "quality": "1080p Dual Latino / Inglés"
+      },
+      "gravity-falls-s1e11": {
+        "fileId": "1_JEQYfAzzQLEm8Kg8hR456AkZ4C7qWnc",
+        "title": "Gravity.Falls.S01E11.2012.1080p-Dual-Lat.mkv",
+        "quality": "1080p Dual Latino / Inglés"
+      },
+      "gravity-falls-s1e12": {
+        "fileId": "1Oft3QjKrxEFJkaSTh4J1Sx6p1yWTRtnM",
+        "title": "Gravity.Falls.S01E12.2012.1080p-Dual-Lat.mkv",
+        "quality": "1080p Dual Latino / Inglés"
+      },
+      "gravity-falls-s1e13": {
+        "fileId": "1MarcQL2qtdH_m2GGOH1f6lYAgfDBxXy4",
+        "title": "Gravity.Falls.S01E13.2012.1080p-Dual-Lat.mkv",
+        "quality": "1080p Dual Latino / Inglés"
+      },
+      "gravity-falls-s1e14": {
+        "fileId": "1NN9BXKDAsiYF7WCPWOeqcxdaxJzVqE0J",
+        "title": "Gravity.Falls.S01E14.2012.1080p-Dual-Lat.mkv",
+        "quality": "1080p Dual Latino / Inglés"
+      },
+      "gravity-falls-s1e15": {
+        "fileId": "1Z3op-dsyuRtP0SVNs66gQN_FXdZqvZoz",
+        "title": "Gravity.Falls.S01E15.2012.1080p-Dual-Lat.mkv",
+        "quality": "1080p Dual Latino / Inglés"
+      }
+    }
+  }
+};

@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import {
   getRegisteredDriveFolders,
   saveRegisteredDriveFolder,
+  removeRegisteredDriveFolder,
   extractDriveId,
   CHICAGO_MED_DRIVE_FOLDER_URL,
   type DriveSeriesConfig,
@@ -26,12 +27,15 @@ interface DriveSyncAdminModalProps {
 }
 
 const PRESET_SERIES = [
-  { name: 'Chicago Med', defaultUrl: CHICAGO_MED_DRIVE_FOLDER_URL },
-  { name: 'Grimm', defaultUrl: 'https://drive.google.com/drive/folders/1lVqDRczGqe-3cYuTcD_NC2Nu0n955TjS?usp=sharing' },
-  { name: 'Chicago Fire', defaultUrl: '' },
-  { name: 'Chicago P.D.', defaultUrl: '' },
-  { name: 'Chicago Justice', defaultUrl: '' },
-  { name: 'Law & Order: SVU', defaultUrl: '' },
+  { name: 'Chicago Med', icon: 'tv', defaultUrl: CHICAGO_MED_DRIVE_FOLDER_URL },
+  { name: 'Grimm', icon: 'tv', defaultUrl: 'https://drive.google.com/drive/folders/1lVqDRczGqe-3cYuTcD_NC2Nu0n955TjS?usp=sharing' },
+  { name: 'Gravity Falls', icon: 'tv', defaultUrl: 'https://drive.google.com/drive/folders/1K3aKcA4mHWeObPjyk1rdbQhWLkM-XSbH?usp=drive_link' },
+  { name: 'Chicago Fire', icon: 'tv', defaultUrl: '' },
+  { name: 'Chicago P.D.', icon: 'tv', defaultUrl: '' },
+  { name: 'Chicago Justice', icon: 'tv', defaultUrl: '' },
+  { name: 'Law & Order: SVU', icon: 'tv', defaultUrl: '' },
+  { name: 'Películas', icon: 'film', defaultUrl: 'https://drive.google.com/drive/folders/1q_Jh0Ijw425S-8jcuJ7ILb6dmcRLcj9_' },
+  { name: 'Otra serie / Personalizada', icon: 'add-circle-outline', defaultUrl: '' },
 ];
 
 export default function DriveSyncAdminModal({ visible, onClose }: DriveSyncAdminModalProps) {
@@ -39,6 +43,8 @@ export default function DriveSyncAdminModal({ visible, onClose }: DriveSyncAdmin
   const isMobile = width < 640;
 
   const [selectedSeries, setSelectedSeries] = useState('Chicago Med');
+  const [isCustomSeries, setIsCustomSeries] = useState(false);
+  const [customSeriesName, setCustomSeriesName] = useState('');
   const [folderUrl, setFolderUrl] = useState(CHICAGO_MED_DRIVE_FOLDER_URL);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
   const [syncSuccess, setSyncSuccess] = useState<boolean | null>(null);
@@ -46,20 +52,46 @@ export default function DriveSyncAdminModal({ visible, onClose }: DriveSyncAdmin
 
   const handleSelectPreset = (name: string, defaultUrl: string) => {
     setSelectedSeries(name);
-    if (defaultUrl) {
-      setFolderUrl(defaultUrl);
+    if (name === 'Otra serie / Personalizada') {
+      setIsCustomSeries(true);
+      setFolderUrl('');
+    } else {
+      setIsCustomSeries(false);
+      if (defaultUrl) {
+        setFolderUrl(defaultUrl);
+      }
     }
   };
 
   const handleSync = () => {
+    const targetSeriesName = isCustomSeries ? customSeriesName.trim() : selectedSeries;
+
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('[DriveSyncAdmin] 🚀 Iniciando sincronización...');
+    console.log('[DriveSyncAdmin] 📺 Serie seleccionada:', targetSeriesName);
+    console.log('[DriveSyncAdmin] 🔗 URL carpeta:', folderUrl);
+    console.log('[DriveSyncAdmin] 📝 Es serie personalizada:', isCustomSeries);
+    console.log('═══════════════════════════════════════════════════════════');
+
+    if (!targetSeriesName) {
+      console.warn('[DriveSyncAdmin] ❌ Sin nombre de serie');
+      setSyncStatus('Por favor escribe el nombre de la serie o selecciona una opción.');
+      setSyncSuccess(false);
+      return;
+    }
+
     if (!folderUrl.trim()) {
+      console.warn('[DriveSyncAdmin] ❌ Sin URL de carpeta');
       setSyncStatus('Por favor ingresa un enlace de carpeta de Google Drive.');
       setSyncSuccess(false);
       return;
     }
 
     const folderId = extractDriveId(folderUrl);
+    console.log('[DriveSyncAdmin] 🔑 Folder ID extraído:', folderId);
+
     if (!folderId) {
+      console.warn('[DriveSyncAdmin] ❌ No se pudo extraer folder ID del URL');
       setSyncStatus('El enlace ingresado no parece ser un enlace válido de Google Drive.');
       setSyncSuccess(false);
       return;
@@ -69,14 +101,53 @@ export default function DriveSyncAdminModal({ visible, onClose }: DriveSyncAdmin
     setSyncSuccess(null);
 
     try {
-      const saved = saveRegisteredDriveFolder(selectedSeries, folderUrl.trim());
+      console.log('[DriveSyncAdmin] 💾 Llamando a saveRegisteredDriveFolder...');
+      const saved = saveRegisteredDriveFolder(targetSeriesName, folderUrl.trim());
+      console.log('[DriveSyncAdmin] ✅ Resultado:', {
+        seriesKey: saved.seriesKey,
+        seriesName: saved.seriesName,
+        episodesCount: saved.episodesCount,
+        folderId: saved.folderId,
+      });
+
       setFolders(getRegisteredDriveFolders());
-      setSyncSuccess(true);
-      setSyncStatus(`¡Listo! Se sincronizaron exitosamente los episodios de ${saved.seriesName} (${saved.episodesCount} capítulos listos para reproducir).`);
+
+      const isMovie = targetSeriesName.toLowerCase().includes('película') || targetSeriesName.toLowerCase().includes('pelicula');
+
+      if (isMovie) {
+        setSyncSuccess(true);
+        const syncCmd = folderUrl.trim()
+          ? `npm run sync:movies -- -f "${folderUrl.trim()}"`
+          : `npm run sync:movies`;
+        console.log('[DriveSyncAdmin] 🎬 Sincronización de películas detectada.');
+        console.log(`[DriveSyncAdmin] 👉 Para sincronizar películas ejecuta: ${syncCmd}`);
+        setSyncStatus(
+          `Carpeta de Películas vinculada. Para descargar carátulas, sinopsis y trailers desde TMDB, ejecuta en terminal:\n${syncCmd}`
+        );
+      } else if (saved.episodesCount === 0) {
+        setSyncSuccess(true);
+        const syncCmd = `npm run sync:series -- -s "${targetSeriesName}" -f "${folderUrl.trim()}"`;
+        console.log('[DriveSyncAdmin] ⚠️ 0 episodios guardados. Para sincronizar ejecuta:');
+        console.log(`[DriveSyncAdmin] 👉 ${syncCmd}`);
+        setSyncStatus(
+          `Carpeta vinculada a "${saved.seriesName}". Para cargar los episodios, ejecuta en terminal:\n${syncCmd}`
+        );
+      } else {
+        setSyncSuccess(true);
+        setSyncStatus(`¡Listo! Se sincronizó "${saved.seriesName}" con ${saved.episodesCount} capítulos.`);
+      }
     } catch (err: any) {
+      console.error('[DriveSyncAdmin] ❌ Error:', err);
       setSyncSuccess(false);
       setSyncStatus(`Error al guardar configuración: ${err?.message || 'Error desconocido'}`);
     }
+  };
+
+  const handleDeleteFolder = (seriesKey: string, seriesName: string) => {
+    removeRegisteredDriveFolder(seriesKey);
+    setFolders(getRegisteredDriveFolders());
+    setSyncSuccess(true);
+    setSyncStatus(`Carpeta de "${seriesName}" removida del sistema.`);
   };
 
   const openLink = (url: string) => {
@@ -121,31 +192,62 @@ export default function DriveSyncAdminModal({ visible, onClose }: DriveSyncAdmin
             <View style={styles.sectionBox}>
               <Text style={styles.sectionTitle}>1. Selecciona o escribe la serie</Text>
               <View style={styles.presetPillsRow}>
-                {PRESET_SERIES.map((s) => (
-                  <Pressable
-                    key={s.name}
-                    style={[
-                      styles.presetPill,
-                      selectedSeries === s.name && styles.presetPillActive,
-                    ]}
-                    onPress={() => handleSelectPreset(s.name, s.defaultUrl)}
-                  >
-                    <Ionicons
-                      name="tv"
-                      size={12}
-                      color={selectedSeries === s.name ? '#ffffff' : '#94a3b8'}
-                    />
-                    <Text
+                {PRESET_SERIES.map((s) => {
+                  const isSelected = selectedSeries === s.name;
+                  const isSpecial = s.name === 'Otra serie / Personalizada';
+                  return (
+                    <Pressable
+                      key={s.name}
                       style={[
-                        styles.presetPillText,
-                        selectedSeries === s.name && styles.presetPillTextActive,
+                        styles.presetPill,
+                        isSelected && styles.presetPillActive,
+                        isSpecial && !isSelected && styles.presetPillSpecial,
                       ]}
+                      onPress={() => handleSelectPreset(s.name, s.defaultUrl)}
                     >
-                      {s.name}
-                    </Text>
-                  </Pressable>
-                ))}
+                      <Ionicons
+                        name={s.icon as any}
+                        size={13}
+                        color={isSelected ? '#ffffff' : isSpecial ? '#c084fc' : '#94a3b8'}
+                      />
+                      <Text
+                        style={[
+                          styles.presetPillText,
+                          isSelected && styles.presetPillTextActive,
+                          isSpecial && !isSelected && { color: '#c084fc', fontWeight: '700' },
+                        ]}
+                      >
+                        {s.name}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
+
+              {/* Campo para escribir serie personalizada cuando se selecciona "Otra serie / Personalizada" */}
+              {isCustomSeries && (
+                <View style={styles.customSeriesField}>
+                  <Text style={styles.customSeriesLabel}>
+                    Nombre de la nueva serie o contenido:
+                  </Text>
+                  <View style={styles.inputContainer}>
+                    <Ionicons name="create-outline" size={16} color="#c084fc" style={{ marginLeft: 12 }} />
+                    <TextInput
+                      style={styles.input}
+                      value={customSeriesName}
+                      onChangeText={setCustomSeriesName}
+                      placeholder="Ej: The Boys, Breaking Bad, Dr. House, Game of Thrones..."
+                      placeholderTextColor="#64748b"
+                      autoFocus={true}
+                    />
+                    {customSeriesName.length > 0 && (
+                      <Pressable style={styles.clearInputBtn} onPress={() => setCustomSeriesName('')}>
+                        <Ionicons name="close-circle" size={16} color="#64748b" />
+                      </Pressable>
+                    )}
+                  </View>
+                </View>
+              )}
 
               <Text style={[styles.sectionTitle, { marginTop: 16 }]}>
                 2. Enlace de la Carpeta de Google Drive
@@ -206,25 +308,36 @@ export default function DriveSyncAdminModal({ visible, onClose }: DriveSyncAdmin
                 {Object.values(folders).map((item) => (
                   <View key={item.seriesKey} style={styles.folderCard}>
                     <View style={styles.folderCardHeader}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8 }}>
                         <View style={styles.folderIcon}>
                           <Ionicons name="folder" size={16} color="#facc15" />
                         </View>
-                        <View>
+                        <View style={{ flex: 1 }}>
                           <Text style={styles.folderSeriesName}>{item.seriesName}</Text>
                           <Text style={styles.folderEpCount}>
-                            {item.episodesCount} capítulos listos para reproducir
+                            {item.episodesCount > 0
+                              ? `${item.episodesCount} capítulos listos para reproducir`
+                              : 'Carpeta vinculada al catálogo'}
                           </Text>
                         </View>
                       </View>
 
-                      <Pressable
-                        style={styles.openDriveBtn}
-                        onPress={() => openLink(item.folderUrl)}
-                      >
-                        <Ionicons name="open-outline" size={14} color="#38bdf8" />
-                        <Text style={styles.openDriveText}>Abrir en Drive</Text>
-                      </Pressable>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Pressable
+                          style={styles.openDriveBtn}
+                          onPress={() => openLink(item.folderUrl)}
+                        >
+                          <Ionicons name="open-outline" size={14} color="#38bdf8" />
+                          <Text style={styles.openDriveText}>Abrir</Text>
+                        </Pressable>
+
+                        <Pressable
+                          style={styles.deleteFolderBtn}
+                          onPress={() => handleDeleteFolder(item.seriesKey, item.seriesName)}
+                        >
+                          <Ionicons name="trash-outline" size={14} color="#f87171" />
+                        </Pressable>
+                      </View>
                     </View>
 
                     <Text style={styles.folderUrlText} numberOfLines={1}>
@@ -478,9 +591,32 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
+  deleteFolderBtn: {
+    padding: 5,
+    borderRadius: 6,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.25)',
+  },
   folderUrlText: {
     color: '#64748b',
     fontSize: 11,
     fontFamily: Platform.OS === 'web' ? 'monospace' : undefined,
+  },
+  presetPillSpecial: {
+    borderColor: 'rgba(192, 132, 252, 0.4)',
+    backgroundColor: 'rgba(192, 132, 252, 0.1)',
+  },
+  customSeriesField: {
+    marginTop: 12,
+  },
+  customSeriesLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#c084fc',
+    marginBottom: 6,
+    letterSpacing: 0.3,
   },
 });

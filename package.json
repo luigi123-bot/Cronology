@@ -17,7 +17,8 @@
     "build:android": "eas build --platform android --profile preview",
     "type-check": "tsc --noEmit",
     "sync:drive": "node scripts/sync-drive.js",
-    "sync:movies": "node scripts/sync-movies.js"
+    "sync:movies": "node scripts/sync-movies.js",
+    "sync:series": "node scripts/sync-series.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1127.0",

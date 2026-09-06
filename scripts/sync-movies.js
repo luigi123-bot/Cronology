@@ -2,7 +2,23 @@ require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 
-const MOVIES_FOLDER_ID = '1q_Jh0Ijw425S-8jcuJ7ILb6dmcRLcj9_';
+const args = process.argv.slice(2);
+let customFolder = null;
+for (let i = 0; i < args.length; i++) {
+  if (args[i] === '-f' || args[i] === '--folder') {
+    customFolder = args[i + 1];
+  }
+}
+
+function extractDriveFolderId(input) {
+  if (!input) return null;
+  const match = input.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  if (match) return match[1];
+  if (/^[a-zA-Z0-9_-]{25,45}$/.test(input.trim())) return input.trim();
+  return null;
+}
+
+const MOVIES_FOLDER_ID = (customFolder && extractDriveFolderId(customFolder)) || '1q_Jh0Ijw425S-8jcuJ7ILb6dmcRLcj9_';
 const MOVIES_FOLDER_URL = `https://drive.google.com/drive/folders/${MOVIES_FOLDER_ID}`;
 const TMDB_BEARER = process.env.EXPO_PUBLIC_TMDB_BEARER_TOKEN || '';
 const TMDB_API_KEY = process.env.EXPO_PUBLIC_TMDB_API_KEY || '';

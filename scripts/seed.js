@@ -27,6 +27,7 @@ const CHICAGO_SERIES = [
   { name: 'Chicago Justice',   tmdbId: 70160, sortOrder: 4, isChicago: true },
   { name: 'Law & Order: SVU',  tmdbId: 2734,  sortOrder: 5, isChicago: false },
   { name: 'Grimm',             tmdbId: 39351, sortOrder: 6, isChicago: false },
+  { name: 'Gravity Falls',     tmdbId: 40075, sortOrder: 7, isChicago: false },
 ];
 
 // Crossover episode lookup: "SeriesName-SxEy" → arc info
