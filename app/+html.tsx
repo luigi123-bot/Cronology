@@ -61,8 +61,84 @@ export default function Root({ children }: PropsWithChildren) {
             a, button {
               transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
             }
+
+            /* ─── ELIMINAR COMPLETAMENTE BADGE Y DRAWER DE NETLIFY ─── */
+            [data-netlify-badge],
+            .netlify-badge,
+            netlify-badge,
+            a[href*="netlify.com"],
+            div[class*="netlify"],
+            div[id*="netlify"],
+            iframe[id*="netlify"],
+            iframe[src*="netlify"],
+            #netlify-drawer,
+            .netlify-drawer-button,
+            [data-netlify-drawer],
+            [id*="netlify-drawer"],
+            [class*="NetlifyBadge"],
+            [class*="netlify-badge"],
+            [aria-label*="Netlify"],
+            [title*="Netlify"] {
+              display: none !important;
+              visibility: hidden !important;
+              opacity: 0 !important;
+              pointer-events: none !important;
+              position: absolute !important;
+              left: -99999px !important;
+              top: -99999px !important;
+              width: 0 !important;
+              height: 0 !important;
+              max-width: 0 !important;
+              max-height: 0 !important;
+              overflow: hidden !important;
+              z-index: -9999 !important;
+            }
           `,
         }} />
+
+        {/* Script para remover de inmediato cualquier elemento inyectado por Netlify */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                function purgeNetlify() {
+                  var selectors = [
+                    '[data-netlify-badge]',
+                    '.netlify-badge',
+                    'netlify-badge',
+                    'a[href*="netlify.com"]',
+                    'div[class*="netlify"]',
+                    'div[id*="netlify"]',
+                    'iframe[id*="netlify"]',
+                    'iframe[src*="netlify"]',
+                    '#netlify-drawer',
+                    '.netlify-drawer-button',
+                    '[data-netlify-drawer]'
+                  ];
+                  selectors.forEach(function(sel) {
+                    var els = document.querySelectorAll(sel);
+                    for (var i = 0; i < els.length; i++) {
+                      if (els[i] && els[i].parentNode) {
+                        els[i].parentNode.removeChild(els[i]);
+                      }
+                    }
+                  });
+                }
+                if (typeof document !== 'undefined') {
+                  purgeNetlify();
+                  document.addEventListener('DOMContentLoaded', purgeNetlify);
+                  window.addEventListener('load', purgeNetlify);
+                  if (typeof MutationObserver !== 'undefined') {
+                    var obs = new MutationObserver(function() {
+                      purgeNetlify();
+                    });
+                    obs.observe(document.documentElement, { childList: true, subtree: true });
+                  }
+                }
+              })();
+            `,
+          }}
+        />
       </head>
       <body>{children}</body>
     </html>
