@@ -140,3 +140,54 @@ export function getStreamMediaInfo(
     alternativeUrl: alternativeUrl !== primaryUrl ? alternativeUrl : null,
   };
 }
+
+/**
+ * Solicita la transformación on-demand al microservicio FFmpeg en el VPS.
+ * Convierte el archivo MKV a MP4 y elimina el MKV en el servidor en el momento de reproducir.
+ */
+export async function requestOnDemandConversion(streamUrl: string): Promise<{
+  success: boolean;
+  streamUrl: string;
+  message: string;
+}> {
+  try {
+    const base = (
+      process.env.EXPO_PUBLIC_STREAMING_BASE_URL || DEFAULT_STREAMING_BASE_URL
+    ).replace(/\/+$/, '');
+
+    let relPath = streamUrl;
+    if (streamUrl.startsWith(base)) {
+      relPath = streamUrl.slice(base.length);
+    } else {
+      const match = streamUrl.match(/https?:\/\/[^\/]+(\/.*)$/);
+      if (match) relPath = match[1];
+    }
+    relPath = relPath.replace(/^\/+/, '');
+
+    const transcoderEndpoint =
+      process.env.EXPO_PUBLIC_TRANSCODER_URL || `${base}:3005/api/convert`;
+
+    const res = await fetch(`${transcoderEndpoint}?relPath=${encodeURIComponent(relPath)}`, {
+      method: 'GET',
+    });
+
+    const data = await res.json();
+    if (data.status === 'ready' && data.streamUrl) {
+      return { success: true, streamUrl: data.streamUrl, message: data.message || 'Conversión exitosa' };
+    }
+    if (data.status === 'converting') {
+      return { success: true, streamUrl: data.streamUrl, message: 'Conversión en proceso en el servidor' };
+    }
+    return {
+      success: false,
+      streamUrl: streamUrl.replace(/\.mkv$/i, '.mp4'),
+      message: data.error || 'No se pudo procesar la conversión en el servidor.',
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      streamUrl: streamUrl.replace(/\.mkv$/i, '.mp4'),
+      message: 'Microservicio transcoder no detectado en el puerto 3005.',
+    };
+  }
+}

@@ -7,6 +7,7 @@ import {
   Platform,
   Linking,
   useWindowDimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -23,6 +24,7 @@ import {
   buildStreamUrl,
   getStreamMediaInfo,
   isMkvUrl,
+  requestOnDemandConversion,
 } from '@/services/streamUrlBuilder';
 import {
   getWatchSession,
@@ -75,7 +77,9 @@ export default function EpisodePlayer({
   const resolvedEpisodeId = episodeId || 0;
   const resolvedSeriesId = seriesId || seriesTmdbId || 0;
 
-  // Estados del reproductor
+  // Estados del reproductor y transformación on-demand
+  const [isConverting, setIsConverting] = useState(false);
+  const [conversionMsg, setConversionMsg] = useState('');
   const [theaterMode, setTheaterMode] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -86,6 +90,27 @@ export default function EpisodePlayer({
     resolvedEpisodeId ? isEpisodeWatchedLocal(resolvedEpisodeId) : false
   );
   const [hasError, setHasError] = useState(false);
+
+  // Acción: Transformar MKV a MP4 y eliminar el MKV en el VPS
+  const handleTransformToMp4 = async () => {
+    setIsConverting(true);
+    setConversionMsg('Conectando con VPS para remux ultra-rápido...');
+    try {
+      const result = await requestOnDemandConversion(activeStreamUrl);
+      if (result.success && result.streamUrl) {
+        setConversionMsg('¡Listo! Video convertido a MP4 y MKV eliminado.');
+        setActiveStreamUrl(result.streamUrl);
+        setHasError(false);
+        setRefreshKey((k) => k + 1);
+      } else {
+        setConversionMsg(result.message || 'Servicio de conversión en VPS no disponible aún.');
+      }
+    } catch {
+      setConversionMsg('Error al comunicar con el conversor del VPS.');
+    } finally {
+      setTimeout(() => setIsConverting(false), 2000);
+    }
+  };
 
   // ─── Ajustes de Cine: Pistas de Audio, Subtítulos, Calidad y Velocidad ───
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -359,6 +384,18 @@ export default function EpisodePlayer({
           </View>
 
           <View style={styles.headerRightGroup}>
+            {/* Botón de Transformación Ultra-Rápida a MP4 */}
+            {isMkv && (
+              <Pressable
+                style={styles.headerTransformBtn}
+                onPress={handleTransformToMp4}
+                accessibilityLabel="Transformar MKV a MP4 en VPS"
+              >
+                <Ionicons name="flash" size={13} color="#facc15" />
+                <Text style={styles.headerTransformBtnText}>Pasar a MP4</Text>
+              </Pressable>
+            )}
+
             {/* Botón de Ajustes (Audio, Subtítulos, Calidad) */}
             <Pressable
               style={styles.settingsHeaderBtn}
@@ -563,7 +600,32 @@ export default function EpisodePlayer({
                   </Text>
                 </Pressable>
               )}
+
+              {isMkv && (
+                <Pressable
+                  style={styles.transformActionBtn}
+                  onPress={handleTransformToMp4}
+                >
+                  <Ionicons name="flash" size={15} color="#ffffff" />
+                  <Text style={styles.transformActionBtnText}>
+                    Transformar a MP4 en VPS (Elimina MKV)
+                  </Text>
+                </Pressable>
+              )}
             </View>
+          </View>
+        )}
+
+        {/* Overlay durante la conversión on-demand */}
+        {isConverting && (
+          <View style={styles.convertingOverlay}>
+            <ActivityIndicator size="large" color="#a855f7" style={{ marginBottom: 12 }} />
+            <Text style={styles.convertingTitle}>⚡ Transformando video a MP4 en VPS...</Text>
+            <Text style={styles.convertingSub}>{conversionMsg}</Text>
+            <Text style={styles.convertingNote}>
+              Copiando video H.264 intacto sin pérdida y convirtiendo audio a AAC.
+              El archivo MKV original se eliminará automáticamente del servidor al concluir.
+            </Text>
           </View>
         )}
       </View>
@@ -1141,6 +1203,70 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.5,
+  },
+  headerTransformBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(234, 179, 8, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(234, 179, 8, 0.45)',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 7,
+  },
+  headerTransformBtnText: {
+    color: '#facc15',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  transformActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#9333ea',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 8,
+    shadowColor: '#9333ea',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 5,
+  },
+  transformActionBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  convertingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(8, 8, 14, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    zIndex: 30,
+  },
+  convertingTitle: {
+    color: '#ffffff',
+    fontSize: 17,
+    fontWeight: '900',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  convertingSub: {
+    color: '#c084fc',
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 10,
+    maxWidth: 420,
+  },
+  convertingNote: {
+    color: '#94a3b8',
+    fontSize: 11.5,
+    textAlign: 'center',
+    maxWidth: 400,
+    lineHeight: 16,
   },
   settingsModalContainer: {
     padding: 16,
