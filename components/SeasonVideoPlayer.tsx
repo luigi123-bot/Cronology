@@ -16,6 +16,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Badge, Surface } from 'react-native-paper';
 import { useSeasonStore } from '@/store/useSeasonStore';
 import { getStillUrl, getBannerUrl, type TMDBEpisode } from '@/services/tmdb';
+import { isMkvUrl } from '@/services/streamUrlBuilder';
 
 interface SeasonVideoPlayerProps {
   seriesTitle?: string;
@@ -108,22 +109,48 @@ export default function SeasonVideoPlayer({
           isMobile ? styles.playerContainerMobile : styles.playerContainerDesktop,
         ]}
       >
-        {/* Componente oficial de Video de Expo */}
+        {/* Componente de Video con soporte para MKV y MP4 */}
         {currentVideoUrl ? (
-          <Video
-            ref={videoRef}
-            style={styles.video}
-            source={{ uri: currentVideoUrl }}
-            useNativeControls
-            resizeMode={ResizeMode.CONTAIN}
-            shouldPlay={isPlaying}
-            isLooping={false}
-            onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
-            onError={(err) => {
-              console.warn('[SeasonVideoPlayer] Video onError:', err);
-              setHasPlaybackError(true);
-            }}
-          />
+          Platform.OS === 'web' ? (
+            <video
+              key={`season-video-${currentVideoUrl}`}
+              ref={(el) => {
+                if (el && isPlaying) el.play().catch(() => {});
+              }}
+              controls
+              autoPlay={isPlaying}
+              playsInline
+              preload="auto"
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
+              onError={() => setHasPlaybackError(true)}
+              style={{
+                width: '100%',
+                height: '100%',
+                backgroundColor: '#000000',
+                outline: 'none',
+              }}
+            >
+              <source src={currentVideoUrl} type={isMkvUrl(currentVideoUrl) ? 'video/x-matroska' : 'video/mp4'} />
+              <source src={currentVideoUrl} type="video/webm" />
+              <source src={currentVideoUrl} type="video/mp4" />
+            </video>
+          ) : (
+            <Video
+              ref={videoRef}
+              style={styles.video}
+              source={{ uri: currentVideoUrl }}
+              useNativeControls
+              resizeMode={ResizeMode.CONTAIN}
+              shouldPlay={isPlaying}
+              isLooping={false}
+              onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
+              onError={(err) => {
+                console.warn('[SeasonVideoPlayer] Video onError:', err);
+                setHasPlaybackError(true);
+              }}
+            />
+          )
         ) : null}
 
         {/* Placeholder / Poster inicial cuando está en pausa o antes de reproducir */}

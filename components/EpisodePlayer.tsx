@@ -19,7 +19,11 @@ import {
   Surface,
   IconButton,
 } from 'react-native-paper';
-import { buildStreamUrl } from '@/services/streamUrlBuilder';
+import {
+  buildStreamUrl,
+  getStreamMediaInfo,
+  isMkvUrl,
+} from '@/services/streamUrlBuilder';
 import {
   getWatchSession,
   saveWatchSession,
@@ -53,8 +57,20 @@ export default function EpisodePlayer({
   const isMobile = width < 600;
   const isFocused = useIsFocused();
 
-  // Construir la URL de streaming
-  const currentUrl = buildStreamUrl(seriesName, seasonNumber, episodeNumber);
+  // Construir la URL e información de streaming (soporta MKV y MP4)
+  const mediaInfo = React.useMemo(() => {
+    return getStreamMediaInfo(seriesName, seasonNumber, episodeNumber);
+  }, [seriesName, seasonNumber, episodeNumber]);
+
+  const [activeStreamUrl, setActiveStreamUrl] = useState<string>(mediaInfo.url);
+
+  useEffect(() => {
+    setActiveStreamUrl(mediaInfo.url);
+    setHasError(false);
+  }, [mediaInfo.url]);
+
+  const currentUrl = activeStreamUrl;
+  const isMkv = isMkvUrl(activeStreamUrl);
   const mediaKey = `episode-${seriesTmdbId || seriesId || 's'}-${seasonNumber}-${episodeNumber}`;
   const resolvedEpisodeId = episodeId || 0;
   const resolvedSeriesId = seriesId || seriesTmdbId || 0;
@@ -330,8 +346,10 @@ export default function EpisodePlayer({
             </Text>
 
             {/* Badges de Formato y Calidad */}
-            <View style={styles.qualityPill}>
-              <Text style={styles.qualityPillText}>{selectedQuality}</Text>
+            <View style={isMkv ? styles.mkvBadge : styles.qualityPill}>
+              <Text style={isMkv ? styles.mkvBadgeText : styles.qualityPillText}>
+                {isMkv ? 'MKV 1080p' : selectedQuality}
+              </Text>
             </View>
 
             <View style={styles.dualAudioPill}>
@@ -403,10 +421,10 @@ export default function EpisodePlayer({
               ref={(el) => {
                 webVideoRef.current = el;
               }}
-              src={currentUrl}
               controls
               autoPlay
               playsInline
+              preload="auto"
               onTimeUpdate={handleWebTimeUpdate}
               onError={() => setHasError(true)}
               style={{
@@ -416,6 +434,14 @@ export default function EpisodePlayer({
                 outline: 'none',
               }}
             >
+              {/* Compatibilidad multi-contenedor: MKV (Matroska) / WebM / MP4 */}
+              <source src={currentUrl} type={isMkv ? 'video/x-matroska' : 'video/mp4'} />
+              <source src={currentUrl} type="video/webm" />
+              <source src={currentUrl} type="video/mp4" />
+              {mediaInfo.alternativeUrl && (
+                <source src={mediaInfo.alternativeUrl} type={isMkv ? 'video/mp4' : 'video/x-matroska'} />
+              )}
+
               {/* Pistas de subtítulos VTT */}
               <track
                 label="Español Latino"
@@ -477,16 +503,67 @@ export default function EpisodePlayer({
           />
         )}
 
-        {/* Fallback de error */}
+        {/* Fallback de error y compatibilidad MKV */}
         {hasError && (
           <View style={styles.errorOverlay}>
-            <MaterialCommunityIcons name="alert-circle-outline" size={44} color="#f87171" />
-            <Text style={styles.errorTitle}>Video temporalmente no disponible</Text>
-            <Text style={styles.errorSub}>No se pudo cargar el archivo desde el servidor de medios.</Text>
-            <Pressable style={styles.directBtn} onPress={() => Linking.openURL(currentUrl)}>
-              <Ionicons name="open-outline" size={16} color="#ffffff" />
-              <Text style={styles.directBtnText}>Abrir enlace en otra pestaña</Text>
-            </Pressable>
+            <MaterialCommunityIcons
+              name={isMkv ? 'movie-open-play-outline' : 'alert-circle-outline'}
+              size={44}
+              color={isMkv ? '#c084fc' : '#f87171'}
+            />
+            <Text style={styles.errorTitle}>
+              {isMkv ? 'Archivo MKV (Matroska Dual Audio)' : 'Video temporalmente no disponible'}
+            </Text>
+            <Text style={styles.errorSub}>
+              {isMkv
+                ? 'El archivo es un MKV original con audio dual. Si tu navegador no lo decodifica de forma nativa, puedes reproducirlo directamente en VLC o abrir la transmisión.'
+                : 'No se pudo cargar el archivo desde el servidor de streaming.'}
+            </Text>
+
+            <View style={styles.errorBtnRow}>
+              <Pressable
+                style={styles.directBtn}
+                onPress={() => {
+                  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                    window.open(currentUrl, '_blank');
+                  } else {
+                    Linking.openURL(currentUrl);
+                  }
+                }}
+              >
+                <Ionicons name="play-circle-outline" size={16} color="#ffffff" />
+                <Text style={styles.directBtnText}>Transmisión Directa</Text>
+              </Pressable>
+
+              <Pressable
+                style={styles.vlcBtn}
+                onPress={() => {
+                  const vlcUrl = currentUrl.replace(/^https?:\/\//, 'vlc://');
+                  Linking.openURL(vlcUrl).catch(() => {
+                    Linking.openURL(currentUrl);
+                  });
+                }}
+              >
+                <MaterialCommunityIcons name="vlc" size={16} color="#f97316" />
+                <Text style={styles.vlcBtnText}>Abrir en VLC</Text>
+              </Pressable>
+
+              {mediaInfo.alternativeUrl && (
+                <Pressable
+                  style={styles.altFormatBtn}
+                  onPress={() => {
+                    setActiveStreamUrl(mediaInfo.alternativeUrl!);
+                    setHasError(false);
+                    setRefreshKey((k) => k + 1);
+                  }}
+                >
+                  <Ionicons name="swap-horizontal" size={15} color="#38bdf8" />
+                  <Text style={styles.altFormatBtnText}>
+                    {`Probar en ${isMkv ? 'MP4' : 'MKV'}`}
+                  </Text>
+                </Pressable>
+              )}
+            </View>
           </View>
         )}
       </View>
@@ -1010,6 +1087,60 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 12,
     fontWeight: '700',
+  },
+  errorBtnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  vlcBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(249, 115, 22, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(249, 115, 22, 0.45)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  vlcBtnText: {
+    color: '#fb923c',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  altFormatBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.35)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  altFormatBtnText: {
+    color: '#38bdf8',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  mkvBadge: {
+    backgroundColor: 'rgba(168, 85, 247, 0.18)',
+    borderWidth: 1,
+    borderColor: '#a855f7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  mkvBadgeText: {
+    color: '#d8b4fe',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   settingsModalContainer: {
     padding: 16,

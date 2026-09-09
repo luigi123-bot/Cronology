@@ -89,6 +89,37 @@ export function removeSeriesCurrentEpisode(seriesId: number): void {
   dismissSeriesFromContinue(seriesId);
 }
 
+// ─── Mapeo de backdrops auténticos por serie para evitar mezclas ─────────────
+export const KNOWN_SERIES_BACKDROPS: Record<string, string> = {
+  grimm: 'https://image.tmdb.org/t/p/w1280/oS3nip9GGsx5A7vWp8A1cazqJlF.jpg',
+  'chicago med': 'https://image.tmdb.org/t/p/w1280/x2jNLrYw1s9i6kihEJqsBQgs9nR.jpg',
+  'chicago fire': 'https://image.tmdb.org/t/p/w1280/9g5a43sL3wT0tBq4D4b1c7Gq9Z0.jpg',
+  'chicago p.d.': 'https://image.tmdb.org/t/p/w1280/tHLhFzR6jZ3q8K7D1W1b3B4c5D6.jpg',
+  'gravity falls': 'https://image.tmdb.org/t/p/w1280/mvl08U24d3L9qE9sW2u8K4G5H6J.jpg',
+};
+
+export function resolveSeriesBackdrop(seriesName?: string, currentBanner?: string | null): string {
+  const CHICAGO_MED_DEFAULT = 'https://image.tmdb.org/t/p/w1280/x2jNLrYw1s9i6kihEJqsBQgs9nR.jpg';
+  const clean = (seriesName || '').toLowerCase().trim();
+
+  // Si es Grimm y tenía el backdrop de Chicago Med por error de fallback previo, corregir
+  if (clean.includes('grimm')) {
+    if (!currentBanner || currentBanner === CHICAGO_MED_DEFAULT) {
+      return KNOWN_SERIES_BACKDROPS.grimm;
+    }
+  }
+
+  if (currentBanner && currentBanner.startsWith('http')) {
+    return currentBanner;
+  }
+
+  for (const [key, url] of Object.entries(KNOWN_SERIES_BACKDROPS)) {
+    if (clean.includes(key)) return url;
+  }
+
+  return currentBanner || CHICAGO_MED_DEFAULT;
+}
+
 // ─── Seguimiento del capítulo donde vas por serie ────────────────────────────
 
 export function saveSeriesCurrentEpisode(
@@ -104,11 +135,22 @@ export function saveSeriesCurrentEpisode(
       localStorage.setItem(DISMISSED_SERIES_KEY, JSON.stringify(Array.from(dismissed)));
     }
 
+    const existing = getSeriesCurrentEpisode(seriesId);
+    const resolvedBanner = resolveSeriesBackdrop(
+      data.seriesName || existing?.seriesName,
+      data.bannerUrl || existing?.bannerUrl
+    );
+
     const progress: SeriesCurrentProgress = {
+      ...existing,
       ...data,
       seriesId,
+      bannerUrl: resolvedBanner,
+      year: data.year || existing?.year,
+      episodeName: data.episodeName || existing?.episodeName || '',
       updatedAt: Date.now(),
     };
+
     localStorage.setItem(
       `${SERIES_PROGRESS_PREFIX}${seriesId}`,
       JSON.stringify(progress)
@@ -121,7 +163,9 @@ export function getSeriesCurrentEpisode(seriesId: number): SeriesCurrentProgress
   try {
     const raw = localStorage.getItem(`${SERIES_PROGRESS_PREFIX}${seriesId}`);
     if (!raw) return null;
-    return JSON.parse(raw);
+    const item: SeriesCurrentProgress = JSON.parse(raw);
+    item.bannerUrl = resolveSeriesBackdrop(item.seriesName, item.bannerUrl);
+    return item;
   } catch {
     return null;
   }
@@ -137,6 +181,7 @@ export function getAllSeriesCurrentEpisodes(): Record<number, SeriesCurrentProgr
         const raw = localStorage.getItem(key);
         if (raw) {
           const item: SeriesCurrentProgress = JSON.parse(raw);
+          item.bannerUrl = resolveSeriesBackdrop(item.seriesName, item.bannerUrl);
           result[item.seriesId] = item;
         }
       }
@@ -156,6 +201,28 @@ export function getOrSeedContinueWatching(
 ): Record<number, SeriesCurrentProgress> {
   const current = getAllSeriesCurrentEpisodes();
   const dismissed = getDismissedSeriesIds();
+
+  // Enriquecer items existentes con banners de availableSeries si faltan
+  if (availableSeries && availableSeries.length > 0) {
+    let updatedAny = false;
+    for (const [sId, item] of Object.entries(current)) {
+      const numId = Number(sId);
+      const match = availableSeries.find(
+        (s) => s.id === numId || s.name?.toLowerCase() === item.seriesName?.toLowerCase()
+      );
+      if (match) {
+        const trueBanner = resolveSeriesBackdrop(item.seriesName, match.bannerUrl || match.posterUrl);
+        if (trueBanner && trueBanner !== item.bannerUrl) {
+          item.bannerUrl = trueBanner;
+          if (match.firstAirDate && !item.year) {
+            item.year = match.firstAirDate.slice(0, 4);
+          }
+          saveSeriesCurrentEpisode(numId, item);
+          updatedAny = true;
+        }
+      }
+    }
+  }
 
   // Si ya tiene progreso guardado o ya descartó elementos, respetamos el estado del usuario
   if (Object.keys(current).length > 0 || dismissed.size > 0) {
@@ -180,12 +247,12 @@ export function getOrSeedContinueWatching(
       seriesId: 6,
       seriesName: 'Grimm',
       seasonNumber: 1,
-      episodeNumber: 13,
-      episodeId: 1318,
-      episodeName: 'Tres monedas a la fuente',
+      episodeNumber: 1,
+      episodeId: 1,
+      episodeName: 'Piloto',
       year: '2011',
       bannerUrl: 'https://image.tmdb.org/t/p/w1280/oS3nip9GGsx5A7vWp8A1cazqJlF.jpg',
-      progressPercent: 14,
+      progressPercent: 45,
       updatedAt: Date.now() - 1000 * 60 * 120, // hace 2 horas
     },
   ];

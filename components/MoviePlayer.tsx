@@ -11,7 +11,7 @@ import {
 import { useIsFocused } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Video, ResizeMode, type AVPlaybackStatus } from 'expo-av';
-import { buildStreamUrl } from '@/services/streamUrlBuilder';
+import { buildStreamUrl, getStreamMediaInfo, isMkvUrl } from '@/services/streamUrlBuilder';
 import {
   getWatchSession,
   saveWatchSession,
@@ -32,8 +32,20 @@ export default function MoviePlayer({
   const isMobile = width < 600;
   const mediaKey = `movie-${movieTitle.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
 
-  // Stream URL directo desde el VPS Nginx
-  const currentUrl = buildStreamUrl(movieTitle, null, null, true);
+  // Stream URL directo desde el VPS Nginx (soporta MKV y MP4)
+  const mediaInfo = React.useMemo(() => {
+    return getStreamMediaInfo(movieTitle, null, null, true);
+  }, [movieTitle]);
+
+  const [activeStreamUrl, setActiveStreamUrl] = useState<string>(mediaInfo.url);
+
+  useEffect(() => {
+    setActiveStreamUrl(mediaInfo.url);
+    setHasError(false);
+  }, [mediaInfo.url]);
+
+  const currentUrl = activeStreamUrl;
+  const isMkv = isMkvUrl(activeStreamUrl);
 
   const [theaterMode, setTheaterMode] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -127,9 +139,11 @@ export default function MoviePlayer({
       {!isFullscreen && (
         <View style={[styles.headerBar, isMobile && styles.headerBarMobile]}>
           <View style={styles.headerLeft}>
-            <View style={styles.vpsBadge}>
-              <Ionicons name="film" size={13} color="#c084fc" />
-              <Text style={styles.vpsBadgeText}>CINEMA</Text>
+            <View style={isMkv ? styles.mkvBadge : styles.vpsBadge}>
+              <Ionicons name="film" size={13} color={isMkv ? '#d8b4fe' : '#c084fc'} />
+              <Text style={isMkv ? styles.mkvBadgeText : styles.vpsBadgeText}>
+                {isMkv ? 'MKV CINEMA' : 'CINEMA'}
+              </Text>
             </View>
             <Text style={styles.qualityText}>{quality}</Text>
           </View>
@@ -162,10 +176,10 @@ export default function MoviePlayer({
               ref={(el) => {
                 webVideoRef.current = el;
               }}
-              src={currentUrl}
               controls
               autoPlay
               playsInline
+              preload="auto"
               onTimeUpdate={handleWebTimeUpdate}
               onError={() => setHasError(true)}
               style={{
@@ -174,7 +188,14 @@ export default function MoviePlayer({
                 backgroundColor: '#000000',
                 outline: 'none',
               }}
-            />
+            >
+              <source src={currentUrl} type={isMkv ? 'video/x-matroska' : 'video/mp4'} />
+              <source src={currentUrl} type="video/webm" />
+              <source src={currentUrl} type="video/mp4" />
+              {mediaInfo.alternativeUrl && (
+                <source src={mediaInfo.alternativeUrl} type={isMkv ? 'video/mp4' : 'video/x-matroska'} />
+              )}
+            </video>
 
             {/* Prompt de Reanudar */}
             {showResumePrompt && (
@@ -213,15 +234,53 @@ export default function MoviePlayer({
 
         {hasError && (
           <View style={styles.errorOverlay}>
-            <MaterialCommunityIcons name="server-network-off" size={44} color="#f87171" />
-            <Text style={styles.errorTitle}>Película no disponible en VPS</Text>
-            <Text style={styles.errorSub}>
-              {`Verifica el archivo en tu servidor Nginx:\n${currentUrl}`}
+            <MaterialCommunityIcons
+              name={isMkv ? 'movie-open-play-outline' : 'server-network-off'}
+              size={44}
+              color={isMkv ? '#c084fc' : '#f87171'}
+            />
+            <Text style={styles.errorTitle}>
+              {isMkv ? 'Película en Formato MKV' : 'Película no disponible en VPS'}
             </Text>
-            <Pressable style={styles.directBtn} onPress={openExternal}>
-              <Ionicons name="open-outline" size={16} color="#ffffff" />
-              <Text style={styles.directBtnText}>Abrir enlace en navegador</Text>
-            </Pressable>
+            <Text style={styles.errorSub}>
+              {isMkv
+                ? 'El archivo es un MKV original. Puedes abrir la transmisión directa en el navegador o iniciarla en VLC Media Player.'
+                : `Verifica el archivo en tu servidor Nginx:\n${currentUrl}`}
+            </Text>
+
+            <View style={styles.errorBtnRow}>
+              <Pressable style={styles.directBtn} onPress={openExternal}>
+                <Ionicons name="play-circle-outline" size={16} color="#ffffff" />
+                <Text style={styles.directBtnText}>Transmisión Directa</Text>
+              </Pressable>
+
+              <Pressable
+                style={styles.vlcBtn}
+                onPress={() => {
+                  const vlcUrl = currentUrl.replace(/^https?:\/\//, 'vlc://');
+                  Linking.openURL(vlcUrl).catch(() => Linking.openURL(currentUrl));
+                }}
+              >
+                <MaterialCommunityIcons name="vlc" size={16} color="#f97316" />
+                <Text style={styles.vlcBtnText}>Abrir en VLC</Text>
+              </Pressable>
+
+              {mediaInfo.alternativeUrl && (
+                <Pressable
+                  style={styles.altFormatBtn}
+                  onPress={() => {
+                    setActiveStreamUrl(mediaInfo.alternativeUrl!);
+                    setHasError(false);
+                    setRefreshKey((k) => k + 1);
+                  }}
+                >
+                  <Ionicons name="swap-horizontal" size={15} color="#38bdf8" />
+                  <Text style={styles.altFormatBtnText}>
+                    {`Probar en ${isMkv ? 'MP4' : 'MKV'}`}
+                  </Text>
+                </Pressable>
+              )}
+            </View>
           </View>
         )}
       </View>
@@ -399,6 +458,63 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   directBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  errorBtnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  vlcBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(249, 115, 22, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(249, 115, 22, 0.45)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  vlcBtnText: {
+    color: '#fb923c',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  altFormatBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.35)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  altFormatBtnText: {
+    color: '#38bdf8',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  mkvBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(168, 85, 247, 0.22)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(168, 85, 247, 0.5)',
+  },
+  mkvBadgeText: {
+    color: '#d8b4fe',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
   footerBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',

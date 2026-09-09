@@ -15,6 +15,7 @@ import { Image } from 'expo-image';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Badge, Surface } from 'react-native-paper';
 import { useMediaStore } from '@/store/useMediaStore';
+import { isMkvUrl } from '@/services/streamUrlBuilder';
 
 export default function DynamicMediaVideoPlayer() {
   const { width } = useWindowDimensions();
@@ -99,19 +100,45 @@ export default function DynamicMediaVideoPlayer() {
           isMobile ? styles.playerBoxMobile : styles.playerBoxDesktop,
         ]}
       >
-        {/* Componente Oficial de Video de Expo */}
+        {/* Componente de Video con soporte multi-contenedor MKV y MP4 */}
         {activeMedia?.streamUrl ? (
-          <Video
-            ref={videoRef}
-            style={styles.video}
-            source={{ uri: activeMedia.streamUrl }}
-            useNativeControls
-            resizeMode={ResizeMode.CONTAIN}
-            shouldPlay={isPlaying}
-            isLooping={false}
-            onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
-            onError={() => setHasError(true)}
-          />
+          Platform.OS === 'web' ? (
+            <video
+              key={`dynamic-media-${activeMedia.streamUrl}`}
+              ref={(el) => {
+                if (el && isPlaying) el.play().catch(() => {});
+              }}
+              controls
+              autoPlay={isPlaying}
+              playsInline
+              preload="auto"
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
+              onError={() => setHasError(true)}
+              style={{
+                width: '100%',
+                height: '100%',
+                backgroundColor: '#000000',
+                outline: 'none',
+              }}
+            >
+              <source src={activeMedia.streamUrl} type={isMkvUrl(activeMedia.streamUrl) ? 'video/x-matroska' : 'video/mp4'} />
+              <source src={activeMedia.streamUrl} type="video/webm" />
+              <source src={activeMedia.streamUrl} type="video/mp4" />
+            </video>
+          ) : (
+            <Video
+              ref={videoRef}
+              style={styles.video}
+              source={{ uri: activeMedia.streamUrl }}
+              useNativeControls
+              resizeMode={ResizeMode.CONTAIN}
+              shouldPlay={isPlaying}
+              isLooping={false}
+              onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
+              onError={() => setHasError(true)}
+            />
+          )
         ) : null}
 
         {/* Placeholder / Póster inicial cuando está en pausa o antes de reproducir */}
