@@ -1,0 +1,409 @@
+{
+  "updatedAt": "2026-09-09T02:06:20.419Z",
+  "vpsBaseUrl": "https://streaming.techzonne.online",
+  "seriesDetected": [
+    {
+      "name": "Grimm",
+      "url": "https://streaming.techzonne.online/Series/Grimm/"
+    },
+    {
+      "name": "Gravity Falls",
+      "url": "https://streaming.techzonne.online/Series/Gravity%20Falls/"
+    }
+  ],
+  "grimmEpisodes": [
+    {
+      "seasonNumber": 1,
+      "episodeNumber": 1,
+      "filename": "Grimm.1x01.HD1080p-lat.mkv",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%201/Grimm.1x01.HD1080p-lat.mkv",
+      "sizeMb": 1151,
+      "contentType": "video/x-matroska"
+    },
+    {
+      "seasonNumber": 1,
+      "episodeNumber": 2,
+      "filename": "Grimm.1x02.HD1080p-lat.mkv",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%201/Grimm.1x02.HD1080p-lat.mkv",
+      "sizeMb": 944,
+      "contentType": "video/x-matroska"
+    },
+    {
+      "seasonNumber": 1,
+      "episodeNumber": 3,
+      "filename": "Grimm.1x03.HD1080p-lat.mkv",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%201/Grimm.1x03.HD1080p-lat.mkv",
+      "sizeMb": 943,
+      "contentType": "video/x-matroska"
+    },
+    {
+      "seasonNumber": 1,
+      "episodeNumber": 4,
+      "filename": "Grimm.1x04.HD1080p-lat.mkv",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%201/Grimm.1x04.HD1080p-lat.mkv",
+      "sizeMb": 849,
+      "contentType": "video/x-matroska"
+    },
+    {
+      "seasonNumber": 1,
+      "episodeNumber": 5,
+      "filename": "Grimm.1x05.HD1080p-lat.mkv",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%201/Grimm.1x05.HD1080p-lat.mkv",
+      "sizeMb": 940,
+      "contentType": "video/x-matroska"
+    },
+    {
+      "seasonNumber": 1,
+      "episodeNumber": 7,
+      "filename": "Grimm.1x07.HD1080p-lat.mkv",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%201/Grimm.1x07.HD1080p-lat.mkv",
+      "sizeMb": 597,
+      "contentType": "video/x-matroska"
+    },
+    {
+      "seasonNumber": 1,
+      "episodeNumber": 8,
+      "filename": "Grimm.1x08.HD1080p-lat.mkv",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%201/Grimm.1x08.HD1080p-lat.mkv",
+      "sizeMb": 598,
+      "contentType": "video/x-matroska"
+    },
+    {
+      "seasonNumber": 1,
+      "episodeNumber": 10,
+      "filename": "Grimm.1x10.HD1080p-lat.mkv",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%201/Grimm.1x10.HD1080p-lat.mkv",
+      "sizeMb": 597,
+      "contentType": "video/x-matroska"
+    },
+    {
+      "seasonNumber": 2,
+      "episodeNumber": 1,
+      "filename": "Grimm.2x01.Dual.1080p-lat.mp4",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%202/Grimm.2x01.Dual.1080p-lat.mp4",
+      "sizeMb": 682,
+      "contentType": "video/mp4"
+    },
+    {
+      "seasonNumber": 2,
+      "episodeNumber": 2,
+      "filename": "Grimm.2x02.Dual.1080p-lat.mp4",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%202/Grimm.2x02.Dual.1080p-lat.mp4",
+      "sizeMb": 688,
+      "contentType": "video/mp4"
+    },
+    {
+      "seasonNumber": 2,
+      "episodeNumber": 3,
+      "filename": "Grimm.2x03.Dual.1080p-lat.mkv",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%202/Grimm.2x03.Dual.1080p-lat.mkv",
+      "sizeMb": 831,
+      "contentType": "video/x-matroska"
+    },
+    {
+      "seasonNumber": 2,
+      "episodeNumber": 4,
+      "filename": "Grimm.2x04.Dual.1080p-lat.mkv",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%202/Grimm.2x04.Dual.1080p-lat.mkv",
+      "sizeMb": 869,
+      "contentType": "video/x-matroska"
+    },
+    {
+      "seasonNumber": 2,
+      "episodeNumber": 5,
+      "filename": "Grimm.2x05.Dual.1080p-lat.mkv",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%202/Grimm.2x05.Dual.1080p-lat.mkv",
+      "sizeMb": 809,
+      "contentType": "video/x-matroska"
+    },
+    {
+      "seasonNumber": 2,
+      "episodeNumber": 6,
+      "filename": "Grimm.2x06.Dual.1080p-lat.mkv",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%202/Grimm.2x06.Dual.1080p-lat.mkv",
+      "sizeMb": 753,
+      "contentType": "video/x-matroska"
+    },
+    {
+      "seasonNumber": 2,
+      "episodeNumber": 10,
+      "filename": "Grimm.2x10.Dual.1080p-lat.mkv",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%202/Grimm.2x10.Dual.1080p-lat.mkv",
+      "sizeMb": 825,
+      "contentType": "video/x-matroska"
+    },
+    {
+      "seasonNumber": 2,
+      "episodeNumber": 11,
+      "filename": "Grimm.2x11.Dual.1080p-lat.mkv",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%202/Grimm.2x11.Dual.1080p-lat.mkv",
+      "sizeMb": 837,
+      "contentType": "video/x-matroska"
+    },
+    {
+      "seasonNumber": 2,
+      "episodeNumber": 12,
+      "filename": "Grimm.2x12.Dual.1080p-lat.mkv",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%202/Grimm.2x12.Dual.1080p-lat.mkv",
+      "sizeMb": 715,
+      "contentType": "video/x-matroska"
+    },
+    {
+      "seasonNumber": 2,
+      "episodeNumber": 13,
+      "filename": "Grimm.2x13.Dual.1080p-lat.mkv",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%202/Grimm.2x13.Dual.1080p-lat.mkv",
+      "sizeMb": 781,
+      "contentType": "video/x-matroska"
+    },
+    {
+      "seasonNumber": 2,
+      "episodeNumber": 14,
+      "filename": "Grimm.2x14.Dual.1080p-lat.mkv",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%202/Grimm.2x14.Dual.1080p-lat.mkv",
+      "sizeMb": 820,
+      "contentType": "video/x-matroska"
+    },
+    {
+      "seasonNumber": 2,
+      "episodeNumber": 15,
+      "filename": "Grimm.2x15.Dual.1080p-lat.mkv",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%202/Grimm.2x15.Dual.1080p-lat.mkv",
+      "sizeMb": 820,
+      "contentType": "video/x-matroska"
+    },
+    {
+      "seasonNumber": 2,
+      "episodeNumber": 16,
+      "filename": "Grimm.2x16.Dual.1080p-lat.mkv",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%202/Grimm.2x16.Dual.1080p-lat.mkv",
+      "sizeMb": 753,
+      "contentType": "video/x-matroska"
+    },
+    {
+      "seasonNumber": 2,
+      "episodeNumber": 17,
+      "filename": "Grimm.2x17.Dual.1080p-lat.mkv",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%202/Grimm.2x17.Dual.1080p-lat.mkv",
+      "sizeMb": 789,
+      "contentType": "video/x-matroska"
+    },
+    {
+      "seasonNumber": 2,
+      "episodeNumber": 18,
+      "filename": "Grimm.2x18.Dual.1080p-lat.mkv",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%202/Grimm.2x18.Dual.1080p-lat.mkv",
+      "sizeMb": 831,
+      "contentType": "video/x-matroska"
+    },
+    {
+      "seasonNumber": 2,
+      "episodeNumber": 19,
+      "filename": "Grimm.2x19.Dual.1080p-lat.mkv",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%202/Grimm.2x19.Dual.1080p-lat.mkv",
+      "sizeMb": 854,
+      "contentType": "video/x-matroska"
+    },
+    {
+      "seasonNumber": 2,
+      "episodeNumber": 20,
+      "filename": "Grimm.2x20.Dual.1080p-lat.mkv",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%202/Grimm.2x20.Dual.1080p-lat.mkv",
+      "sizeMb": 760,
+      "contentType": "video/x-matroska"
+    },
+    {
+      "seasonNumber": 2,
+      "episodeNumber": 21,
+      "filename": "Grimm.2x21.Dual.1080p-lat.mkv",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%202/Grimm.2x21.Dual.1080p-lat.mkv",
+      "sizeMb": 763,
+      "contentType": "video/x-matroska"
+    },
+    {
+      "seasonNumber": 2,
+      "episodeNumber": 22,
+      "filename": "Grimm.2x22.Dual.1080p-lat.mkv",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%202/Grimm.2x22.Dual.1080p-lat.mkv",
+      "sizeMb": 869,
+      "contentType": "video/x-matroska"
+    },
+    {
+      "seasonNumber": 5,
+      "episodeNumber": 1,
+      "filename": "GRMM51.mp4",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%205/GRMM51.mp4",
+      "sizeMb": 663,
+      "contentType": "video/mp4"
+    },
+    {
+      "seasonNumber": 5,
+      "episodeNumber": 2,
+      "filename": "GRMM52.mp4",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%205/GRMM52.mp4",
+      "sizeMb": 726,
+      "contentType": "video/mp4"
+    },
+    {
+      "seasonNumber": 5,
+      "episodeNumber": 3,
+      "filename": "GRMM53.mp4",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%205/GRMM53.mp4",
+      "sizeMb": 680,
+      "contentType": "video/mp4"
+    },
+    {
+      "seasonNumber": 5,
+      "episodeNumber": 4,
+      "filename": "GRMM54.mp4",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%205/GRMM54.mp4",
+      "sizeMb": 703,
+      "contentType": "video/mp4"
+    },
+    {
+      "seasonNumber": 5,
+      "episodeNumber": 5,
+      "filename": "GRMM55.mp4",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%205/GRMM55.mp4",
+      "sizeMb": 759,
+      "contentType": "video/mp4"
+    },
+    {
+      "seasonNumber": 5,
+      "episodeNumber": 6,
+      "filename": "GRMM56.mp4",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%205/GRMM56.mp4",
+      "sizeMb": 676,
+      "contentType": "video/mp4"
+    },
+    {
+      "seasonNumber": 5,
+      "episodeNumber": 7,
+      "filename": "GRMM57.mp4",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%205/GRMM57.mp4",
+      "sizeMb": 672,
+      "contentType": "video/mp4"
+    },
+    {
+      "seasonNumber": 5,
+      "episodeNumber": 8,
+      "filename": "GRMM58.mp4",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%205/GRMM58.mp4",
+      "sizeMb": 822,
+      "contentType": "video/mp4"
+    },
+    {
+      "seasonNumber": 5,
+      "episodeNumber": 9,
+      "filename": "GRMM59.mp4",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%205/GRMM59.mp4",
+      "sizeMb": 748,
+      "contentType": "video/mp4"
+    },
+    {
+      "seasonNumber": 5,
+      "episodeNumber": 10,
+      "filename": "GRMM510.mp4",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%205/GRMM510.mp4",
+      "sizeMb": 634,
+      "contentType": "video/mp4"
+    },
+    {
+      "seasonNumber": 5,
+      "episodeNumber": 11,
+      "filename": "GRMM511.mp4",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%205/GRMM511.mp4",
+      "sizeMb": 811,
+      "contentType": "video/mp4"
+    },
+    {
+      "seasonNumber": 5,
+      "episodeNumber": 12,
+      "filename": "GRMM512.mp4",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%205/GRMM512.mp4",
+      "sizeMb": 695,
+      "contentType": "video/mp4"
+    },
+    {
+      "seasonNumber": 5,
+      "episodeNumber": 13,
+      "filename": "GRMM513.mp4",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%205/GRMM513.mp4",
+      "sizeMb": 694,
+      "contentType": "video/mp4"
+    },
+    {
+      "seasonNumber": 5,
+      "episodeNumber": 14,
+      "filename": "GRMM514.mp4",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%205/GRMM514.mp4",
+      "sizeMb": 854,
+      "contentType": "video/mp4"
+    },
+    {
+      "seasonNumber": 5,
+      "episodeNumber": 15,
+      "filename": "GRMM515.mp4",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%205/GRMM515.mp4",
+      "sizeMb": 670,
+      "contentType": "video/mp4"
+    },
+    {
+      "seasonNumber": 5,
+      "episodeNumber": 16,
+      "filename": "GRMM516.mp4",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%205/GRMM516.mp4",
+      "sizeMb": 677,
+      "contentType": "video/mp4"
+    },
+    {
+      "seasonNumber": 5,
+      "episodeNumber": 17,
+      "filename": "GRMM517.mp4",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%205/GRMM517.mp4",
+      "sizeMb": 657,
+      "contentType": "video/mp4"
+    },
+    {
+      "seasonNumber": 5,
+      "episodeNumber": 18,
+      "filename": "GRMM518.mp4",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%205/GRMM518.mp4",
+      "sizeMb": 675,
+      "contentType": "video/mp4"
+    },
+    {
+      "seasonNumber": 5,
+      "episodeNumber": 19,
+      "filename": "GRMM519.mp4",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%205/GRMM519.mp4",
+      "sizeMb": 610,
+      "contentType": "video/mp4"
+    },
+    {
+      "seasonNumber": 5,
+      "episodeNumber": 20,
+      "filename": "GRMM520.mp4",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%205/GRMM520.mp4",
+      "sizeMb": 607,
+      "contentType": "video/mp4"
+    },
+    {
+      "seasonNumber": 5,
+      "episodeNumber": 21,
+      "filename": "GRMM521.mp4",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%205/GRMM521.mp4",
+      "sizeMb": 653,
+      "contentType": "video/mp4"
+    },
+    {
+      "seasonNumber": 5,
+      "episodeNumber": 22,
+      "filename": "GRMM522.mp4",
+      "url": "https://streaming.techzonne.online/Series/Grimm/Season%205/GRMM522.mp4",
+      "sizeMb": 622,
+      "contentType": "video/mp4"
+    }
+  ],
+  "totalGrimmSynced": 49
+}

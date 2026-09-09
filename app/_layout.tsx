@@ -56,6 +56,8 @@ export default function RootLayout() {
             <Stack.Screen name="series/[id]" options={{ headerShown: false }} />
             <Stack.Screen name="episode/[id]" options={{ headerShown: false }} />
             <Stack.Screen name="movie/[id]" options={{ headerShown: false }} />
+            <Stack.Screen name="serie/[id]/temporada/[season]" options={{ headerShown: false }} />
+            <Stack.Screen name="media/[type]/[id]" options={{ headerShown: false }} />
           </Stack>
         </AuthGate>
       </PaperProvider>

@@ -314,6 +314,8 @@ export default function EpisodeDetailScreen() {
             episodeNumber={episode.episodeNumber}
             episodeName={episode.name}
             youtubeClipId={episode.youtubeClipId}
+            episodeId={episode.id}
+            seriesId={episode.seriesId}
           />
 
           {/* Episode Details */}

@@ -18,7 +18,8 @@
     "type-check": "tsc --noEmit",
     "sync:drive": "node scripts/sync-drive.js",
     "sync:movies": "node scripts/sync-movies.js",
-    "sync:series": "node scripts/sync-series.js"
+    "sync:series": "node scripts/sync-series.js",
+    "sync:vps": "node scripts/sync-vps.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1127.0",
@@ -31,6 +32,7 @@
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.38.4",
     "expo": "~51.0.28",
+    "expo-av": "~14.0.7",
     "expo-blur": "~13.0.2",
     "expo-constants": "~16.0.2",
     "expo-font": "~12.0.10",

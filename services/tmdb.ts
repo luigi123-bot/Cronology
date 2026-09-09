@@ -61,6 +61,20 @@ export interface TMDBVideo {
   official: boolean;
 }
 
+export interface TMDBMovie {
+  id: number;
+  title: string;
+  original_title: string;
+  overview: string;
+  poster_path: string | null;
+  backdrop_path: string | null;
+  release_date: string;
+  runtime: number | null;
+  vote_average: number;
+  genres: { id: number; name: string }[];
+  videos?: { results: TMDBVideo[] };
+}
+
 export interface TMDBEpisode {
   id: number;
   name: string;
@@ -112,6 +126,13 @@ export const searchSeries = async (query: string): Promise<TMDBSearchResult[]> =
     include_adult: 'false',
   });
   return data.results;
+};
+
+/** Get movie details by TMDB ID */
+export const getMovieDetails = async (tmdbId: number): Promise<TMDBMovie> => {
+  return tmdbFetch<TMDBMovie>(`/movie/${tmdbId}`, {
+    append_to_response: 'videos,external_ids',
+  });
 };
 
 /** Get full series details including videos (trailers) */

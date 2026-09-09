@@ -330,6 +330,22 @@ export default function SeriesDetailScreen() {
                 </Text>
               </Pressable>
             )}
+
+            <Pressable
+              style={styles.vpsStreamBtn}
+              onPress={() =>
+                router.push({
+                  pathname: '/serie/[id]/temporada/[season]',
+                  params: {
+                    id: String(seriesData.tmdbId || id),
+                    season: String(selectedSeason),
+                  },
+                } as any)
+              }
+            >
+              <Ionicons name="play-circle" size={16} color="#fff" />
+              <Text style={styles.vpsStreamBtnText}>Ver Temporada {selectedSeason}</Text>
+            </Pressable>
           </View>
 
         {/* Overview */}
@@ -508,6 +524,16 @@ const styles = StyleSheet.create({
     borderColor: '#f59e0b',
   },
   crossoverBtnText: { color: '#f59e0b', fontFamily: 'Inter_700Bold', fontSize: 14 },
+  vpsStreamBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#7c5af3',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 50,
+  },
+  vpsStreamBtnText: { color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 13 },
   overview: {
     color: '#94a3b8',
     fontFamily: 'Inter_400Regular',
